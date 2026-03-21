@@ -1,0 +1,1038 @@
+{% extends 'layout/layout_vertical.html' %}
+{% comment %}
+==========================================================================
+LAPORAN KEUANGAN - Laporan Keuangan
+Halaman laporan keuangan (pendapatan, pengeluaran, laba/rugi).
+Filter: periode, kategori. Grafik dan tabel ringkasan.
+==========================================================================
+{% endcomment %}
+{% load static %}
+{% load currency_filters %}
+
+{% block title %}Laporan Keuangan - ERP{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+{% endblock vendor_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <h4 class="mb-4"><i class="ri-bar-chart-box-line me-2"></i>Laporan Keuangan</h4>
+
+    <!-- 4 Summary Cards -->
+    <div class="row g-2 g-md-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Total Pemasukan</p>
+                            <h4 class="mb-0 text-success summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ total_harga SO (confirmed/delivered/completed) + Σ total_harga POS (paid).<br><br><b>Sumber:</b> Tabel SalesOrder + POSTransaction.<br>Mendukung filter tanggal.">{{ total_pemasukan|rupiah }}</h4>
+                            <small class="text-muted">Dari penjualan</small>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-success rounded p-2">
+                                <i class="ri-arrow-down-circle-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Total Pengeluaran</p>
+                            <h4 class="mb-0 text-danger summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ nominal Biaya (status approved) + Σ total_harga PO (approved/received).<br><br><b>Sumber:</b> Tabel Biaya + PurchaseOrder.<br>Mendukung filter tanggal.">{{ total_pengeluaran|rupiah }}</h4>
+                            <small class="text-muted">Pembelian + biaya</small>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-danger rounded p-2">
+                                <i class="ri-arrow-up-circle-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Laba/Rugi Bersih</p>
+                            <h4 class="mb-0 {% if laba_rugi >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Total Pemasukan − Total Pengeluaran.<br><br><b>Sumber:</b> Selisih pemasukan dan pengeluaran.<br>Mendukung filter tanggal.">
+                                {{ laba_rugi|rupiah }}
+                            </h4>
+                            <small class="text-muted">{% if laba_rugi >= 0 %}Laba{% else %}Rugi{% endif %}</small>
+                        </div>
+                        <div class="card-icon">
+                            <span
+                                class="badge {% if laba_rugi >= 0 %}bg-label-success{% else %}bg-label-danger{% endif %} rounded p-2">
+                                <i class="ri-funds-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Total Aset</p>
+                            <h4 class="mb-0 text-primary summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_beli × qty_total_pernah_masuk)<br><br><b>Sumber:</b> Semua produk yang pernah masuk (stok + terjual + adjustment).<br>Bersifat kumulatif historis, tidak dipengaruhi filter tanggal.">{{ total_aset|rupiah }}</h4>
+                            <small class="text-muted">Nilai inventori historis</small>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-primary rounded p-2">
+                                <i class="ri-safe-2-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ringkasan Keuntungan & Stok -->
+    <div class="row g-2 g-md-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Keuntungan Kotor</p>
+                            <h4 class="mb-0 {% if keuntungan_kotor >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_jual − harga_beli) × qty per item terjual (SO + POS).<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Mendukung filter tanggal dan cabang.">{{ keuntungan_kotor|rupiah }}</h4>
+                            <small class="text-muted">Margin penjualan</small>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-success rounded p-2">
+                                <i class="ri-money-dollar-circle-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Total Harga Beli (Ready)</p>
+                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_beli × stok_saat_ini)<br><br><b>Sumber:</b> Hanya produk yang stoknya > 0.<br>Dari tabel Produk × Stok.">{{ total_harga_beli_ready|rupiah }}</h4>
+                            <small class="text-muted">Produk stok > 0</small>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-info rounded p-2">
+                                <i class="ri-shopping-bag-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Total Harga Jual (Ready)</p>
+                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_jual × stok_saat_ini)<br><br><b>Sumber:</b> Hanya produk yang stoknya > 0.<br>Dari tabel Produk × Stok.">{{ total_harga_jual_ready|rupiah }}</h4>
+                            <small class="text-muted">Produk stok > 0</small>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-info rounded p-2">
+                                <i class="ri-price-tag-3-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Estimasi Keuntungan</p>
+                            <h4 class="mb-0 {% if estimasi_keuntungan >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Total Harga Jual (Ready) − Total Harga Beli (Ready).<br><br><b>Sumber:</b> Selisih harga jual dan harga beli dari produk stok > 0.<br>Potensi keuntungan jika semua stok terjual.">{{ estimasi_keuntungan|rupiah }}</h4>
+                            <small class="text-muted">Jika semua stok terjual</small>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-warning rounded p-2">
+                                <i class="ri-line-chart-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Tanggal Mulai</label>
+                    <input type="date" class="form-control" id="startDate" value="{{ filter_start_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tanggal Akhir</label>
+                    <input type="date" class="form-control" id="endDate" value="{{ filter_end_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cabang</label>
+                    <select class="form-select" id="cabangFilter">
+                        <option value="">Semua Cabang</option>
+                        {% for gudang in gudang_list %}
+                        <option value="{{ gudang.pk }}" {% if filter_cabang == gudang.pk|stringformat:'d' %}selected{% endif %}>{{ gudang.nama }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Metode Pembayaran</label>
+                    <select class="form-select" id="metodeFilter">
+                        <option value="">Semua Metode</option>
+                        {% for metode in metode_pembayaran_list %}
+                        <option value="{{ metode.pk }}" {% if filter_metode == metode.pk|stringformat:'d' %}selected{% endif %}>{{ metode.nama }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <!-- Baris kedua: Kolom filter + Tombol -->
+            <div class="row g-3 mt-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Kolom Pemasukan</label>
+                    <div class="dropdown">
+                        <button class="btn btn-label-secondary dropdown-toggle waves-effect w-100" type="button"
+                            id="colPemasukanDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                            aria-expanded="false">
+                            <i class="ri-layout-column-line me-1"></i>
+                            Pilih Kolom Pemasukan
+                        </button>
+                        <div class="dropdown-menu p-3" aria-labelledby="colPemasukanDropdown" style="min-width: 280px;">
+                            <h6 class="dropdown-header px-0 mb-2">Kolom Tabel Pemasukan</h6>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pemasukan-cb" type="checkbox" value="0" id="cp-noso"
+                                    checked onchange="togglePemasukanCols()">
+                                <label class="form-check-label" for="cp-noso">No. SO</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pemasukan-cb" type="checkbox" value="1"
+                                    id="cp-tanggal" checked onchange="togglePemasukanCols()">
+                                <label class="form-check-label" for="cp-tanggal">Tanggal</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pemasukan-cb" type="checkbox" value="2"
+                                    id="cp-customer" checked onchange="togglePemasukanCols()">
+                                <label class="form-check-label" for="cp-customer">Customer</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pemasukan-cb" type="checkbox" value="3"
+                                    id="cp-cabang" checked onchange="togglePemasukanCols()">
+                                <label class="form-check-label" for="cp-cabang">Cabang</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pemasukan-cb" type="checkbox" value="4"
+                                    id="cp-metode" checked onchange="togglePemasukanCols()">
+                                <label class="form-check-label" for="cp-metode">Metode Pembayaran</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pemasukan-cb" type="checkbox" value="5" id="cp-total"
+                                    checked onchange="togglePemasukanCols()">
+                                <label class="form-check-label" for="cp-total">Total</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pemasukan-cb" type="checkbox" value="6"
+                                    id="cp-status" checked onchange="togglePemasukanCols()">
+                                <label class="form-check-label" for="cp-status">Status</label>
+                            </div>
+                            <div class="dropdown-divider my-2"></div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-primary flex-fill" onclick="selectAllPemasukanCols()">
+                                    <i class="ri-checkbox-multiple-line ri-16px"></i> Semua
+                                </button>
+                                <button class="btn btn-sm btn-label-secondary flex-fill"
+                                    onclick="deselectAllPemasukanCols()">
+                                    <i class="ri-checkbox-blank-line ri-16px"></i> Kosongkan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Kolom Pengeluaran</label>
+                    <div class="dropdown">
+                        <button class="btn btn-label-secondary dropdown-toggle waves-effect w-100" type="button"
+                            id="colPengeluaranDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                            aria-expanded="false">
+                            <i class="ri-layout-column-line me-1"></i>
+                            Pilih Kolom Pengeluaran
+                        </button>
+                        <div class="dropdown-menu p-3" aria-labelledby="colPengeluaranDropdown"
+                            style="min-width: 280px;">
+                            <h6 class="dropdown-header px-0 mb-2">Kolom Tabel Pengeluaran</h6>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pengeluaran-cb" type="checkbox" value="0"
+                                    id="ce-tanggal" checked onchange="togglePengeluaranCols()">
+                                <label class="form-check-label" for="ce-tanggal">Tanggal</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pengeluaran-cb" type="checkbox" value="1"
+                                    id="ce-jenis" checked onchange="togglePengeluaranCols()">
+                                <label class="form-check-label" for="ce-jenis">Jenis</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pengeluaran-cb" type="checkbox" value="2"
+                                    id="ce-keterangan" checked onchange="togglePengeluaranCols()">
+                                <label class="form-check-label" for="ce-keterangan">Keterangan</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pengeluaran-cb" type="checkbox" value="3"
+                                    id="ce-cabang" checked onchange="togglePengeluaranCols()">
+                                <label class="form-check-label" for="ce-cabang">Cabang</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pengeluaran-cb" type="checkbox" value="4"
+                                    id="ce-metode" checked onchange="togglePengeluaranCols()">
+                                <label class="form-check-label" for="ce-metode">Metode Pembayaran</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input col-pengeluaran-cb" type="checkbox" value="5"
+                                    id="ce-total" checked onchange="togglePengeluaranCols()">
+                                <label class="form-check-label" for="ce-total">Total</label>
+                            </div>
+                            <div class="dropdown-divider my-2"></div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-primary flex-fill" onclick="selectAllPengeluaranCols()">
+                                    <i class="ri-checkbox-multiple-line ri-16px"></i> Semua
+                                </button>
+                                <button class="btn btn-sm btn-label-secondary flex-fill"
+                                    onclick="deselectAllPengeluaranCols()">
+                                    <i class="ri-checkbox-blank-line ri-16px"></i> Kosongkan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" style="visibility:hidden;">Aksi</label>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary" onclick="applyFilter()">
+                            <i class="ri-filter-3-line me-1"></i>Terapkan
+                        </button>
+                        <button class="btn btn-label-secondary" onclick="resetFilter()">
+                            <i class="ri-refresh-line me-1"></i>Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabel Pemasukan -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+            <h5 class="mb-0"><i class="ri-arrow-down-line me-2 text-success"></i>Pemasukan (Penjualan)</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-label-success" onclick="exportToExcel()"><i
+                        class="ri-file-excel-2-line me-1"></i>Export Excel</button>
+                <button class="btn btn-sm btn-label-danger" onclick="exportToPDF()"><i
+                        class="ri-file-pdf-line me-1"></i>Export PDF</button>
+            </div>
+        </div>
+        <div class="card-datatable table-responsive">
+            <table class="table table-hover" id="tabelPemasukan">
+                <thead>
+                    <tr>
+                        <th>No. SO</th>
+                        <th>Tanggal</th>
+                        <th>Customer</th>
+                        <th>Cabang</th>
+                        <th>Metode Pembayaran</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for so in sales_order_list %}
+                    <tr>
+                        <td><code>{{ so.nomor_so }}</code></td>
+                        <td>{{ so.tanggal|date:"d M Y" }}</td>
+                        <td>{{ so.customer.nama }}</td>
+                        <td>{{ so.gudang.nama|default:"-" }}</td>
+                        <td>{{ so.metode_pembayaran.nama|default:"-" }}</td>
+                        <td class="text-success fw-semibold">+{{ so.total_harga|rupiah }}</td>
+                        <td>
+                            {% if so.status == 'completed' %}
+                            <span class="badge bg-label-success">Selesai</span>
+                            {% else %}
+                            <span class="badge bg-label-secondary">{{ so.get_status_display|default:so.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow"
+                                    data-bs-toggle="dropdown">
+                                    <i class="ri-more-2-line"></i>
+                                </button>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{% url 'laporan:penjualan-detail' so.pk %}">
+                                        <i class="ri-eye-line me-2"></i>Lihat Detail
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% for pos in pos_transaction_list %}
+                    <tr>
+                        <td><code>{{ pos.nomor_transaksi }}</code></td>
+                        <td>{{ pos.tanggal|date:"d M Y" }}</td>
+                        <td>{{ pos.nama_customer|default:"Umum" }} <span class="badge bg-label-info ms-1">POS</span>
+                        </td>
+                        <td>{{ pos.gudang.nama|default:"-" }}</td>
+                        <td>{{ pos.metode_pembayaran.nama|default:"-" }}</td>
+                        <td class="text-success fw-semibold">+{{ pos.total_harga|rupiah }}</td>
+                        <td>
+                            {% if pos.status == 'paid' %}
+                            <span class="badge bg-label-success">Lunas</span>
+                            {% else %}
+                            <span class="badge bg-label-secondary">{{ pos.get_status_display|default:pos.status
+                                }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow"
+                                    data-bs-toggle="dropdown">
+                                    <i class="ri-more-2-line"></i>
+                                </button>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{% url 'pos:invoice_detail' pos.pk %}">
+                                        <i class="ri-eye-line me-2"></i>Lihat Invoice
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not sales_order_list and not pos_transaction_list %}
+                    <tr>
+                        <td colspan="8" class="text-center py-3">
+                            <p class="text-muted mb-0">Belum ada pemasukan</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+                <tfoot class="table-footer-summary">
+                    <tr>
+                        <td colspan="5" class="text-start ps-4 py-3" style="vertical-align: middle;">
+                            <div class="d-flex align-items-center justify-content-start">
+                                <i class="ri-calculator-line me-2 text-primary" style="font-size: 1.5rem;"></i>
+                                <div class="text-start">
+                                    <strong class="d-block" style="font-size: 1rem;">RINGKASAN PEMASUKAN</strong>
+                                    <small class="text-muted" style="font-size: 0.75rem;">SO: {{ total_sales_order|rupiah }} | POS: {{ total_pos|rupiah }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3" style="vertical-align: middle;">
+                            <div class="d-flex flex-column align-items-center">
+                                <span class="badge bg-label-success d-flex align-items-center gap-1 mb-2"
+                                    style="font-size: 0.9rem; padding: 0.5rem 0.75rem; min-width: 140px;">
+                                    <i class="ri-arrow-down-circle-line"></i>
+                                    <span>{{ total_pemasukan|rupiah }}</span>
+                                </span>
+                                <small class="text-muted fw-medium" style="font-size: 0.75rem;">Total Pemasukan</small>
+                            </div>
+                        </td>
+                        <td class="py-3"></td>
+                        <td class="py-3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Tabel Pengeluaran -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between">
+            <h5 class="mb-0"><i class="ri-arrow-up-line me-2 text-danger"></i>Pengeluaran (Pembelian & Biaya)</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-label-success" onclick="exportToExcel()"><i
+                        class="ri-file-excel-2-line me-1"></i>Export Excel</button>
+                <button class="btn btn-sm btn-label-danger" onclick="exportToPDF()"><i
+                        class="ri-file-pdf-line me-1"></i>Export PDF</button>
+            </div>
+        </div>
+        <div class="card-datatable table-responsive">
+            <table class="table table-hover" id="tabelPengeluaran">
+                <thead>
+                    <tr>
+                        <th>Tanggal</th>
+                        <th>Jenis</th>
+                        <th>Keterangan</th>
+                        <th>Cabang</th>
+                        <th>Metode Pembayaran</th>
+                        <th>Total</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for po in purchase_order_list %}
+                    <tr>
+                        <td>{{ po.tanggal|date:"d M Y" }}</td>
+                        <td><span class="badge bg-label-primary">Pembelian</span></td>
+                        <td>{{ po.nomor_po }} - {{ po.supplier.nama }}</td>
+                        <td>{{ po.gudang.nama|default:"-" }}</td>
+                        <td>{{ po.metode_pembayaran.nama|default:"-" }}</td>
+                        <td class="text-danger fw-semibold">-{{ po.total_harga|rupiah }}</td>
+                        <td>
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow"
+                                    data-bs-toggle="dropdown">
+                                    <i class="ri-more-2-line"></i>
+                                </button>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{% url 'laporan:pembelian-detail' po.pk %}">
+                                        <i class="ri-eye-line me-2"></i>Lihat Detail
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% for biaya in transaksi_biaya_list %}
+                    <tr>
+                        <td>{{ biaya.tanggal|date:"d M Y" }}</td>
+                        <td><span class="badge bg-label-warning">Biaya</span></td>
+                        <td>{{ biaya.kategori.nama }} - {{ biaya.deskripsi|truncatechars:40 }}</td>
+                        <td>{{ biaya.cabang.nama|default:"-" }}</td>
+                        <td>{{ biaya.metode_pembayaran.nama|default:"-" }}</td>
+                        <td class="text-danger fw-semibold">-{{ biaya.jumlah|rupiah }}</td>
+                        <td>
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow"
+                                    data-bs-toggle="dropdown">
+                                    <i class="ri-more-2-line"></i>
+                                </button>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{% url 'biaya:transaksi_detail' biaya.pk %}">
+                                        <i class="ri-eye-line me-2"></i>Lihat Detail
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not purchase_order_list and not transaksi_biaya_list %}
+                    <tr>
+                        <td colspan="7" class="text-center py-3">
+                            <p class="text-muted mb-0">Belum ada pengeluaran</p>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+                <tfoot class="table-footer-summary">
+                    <tr>
+                        <td colspan="5" class="text-start ps-4 py-3" style="vertical-align: middle;">
+                            <div class="d-flex align-items-center justify-content-start">
+                                <i class="ri-calculator-line me-2 text-primary" style="font-size: 1.5rem;"></i>
+                                <div class="text-start">
+                                    <strong class="d-block" style="font-size: 1rem;">RINGKASAN PENGELUARAN</strong>
+                                    <small class="text-muted" style="font-size: 0.75rem;">PO: {{ total_pembelian|rupiah }} | Biaya: {{ total_biaya|rupiah }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3" style="vertical-align: middle;">
+                            <div class="d-flex flex-column align-items-center">
+                                <span class="badge bg-label-danger d-flex align-items-center gap-1 mb-2"
+                                    style="font-size: 0.9rem; padding: 0.5rem 0.75rem; min-width: 140px;">
+                                    <i class="ri-arrow-up-circle-line"></i>
+                                    <span>{{ total_pengeluaran|rupiah }}</span>
+                                </span>
+                                <small class="text-muted fw-medium" style="font-size: 0.75rem;">Total
+                                    Pengeluaran</small>
+                            </div>
+                        </td>
+                        <td class="py-3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block page_js %}
+<script>
+    // Initialize DataTables
+    let dtPemasukan, dtPengeluaran;
+    $(document).ready(function () {
+        if ($('#tabelPemasukan tbody tr').length > 0 && !$('#tabelPemasukan tbody tr td[colspan]').length) {
+            dtPemasukan = $('#tabelPemasukan').DataTable({
+                language: {
+                    "sEmptyTable": "Tidak ada data", "sLengthMenu": "Tampilkan _MENU_ data", "sSearch": "Cari:",
+                    "sInfo": "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
+                    "oPaginate": { "sFirst": "Pertama", "sPrevious": "Sebelumnya", "sNext": "Selanjutnya", "sLast": "Terakhir" }
+                },
+                order: [[1, 'desc']],
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, -1], ['10', '25', '50', 'Semua']],
+                responsive: false,
+                columnDefs: [{ orderable: false, targets: [7] }],
+                dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>><"table-responsive"rt><"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
+            });
+        }
+        if ($('#tabelPengeluaran tbody tr').length > 0 && !$('#tabelPengeluaran tbody tr td[colspan]').length) {
+            dtPengeluaran = $('#tabelPengeluaran').DataTable({
+                language: {
+                    "sEmptyTable": "Tidak ada data", "sLengthMenu": "Tampilkan _MENU_ data", "sSearch": "Cari:",
+                    "sInfo": "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
+                    "oPaginate": { "sFirst": "Pertama", "sPrevious": "Sebelumnya", "sNext": "Selanjutnya", "sLast": "Terakhir" }
+                },
+                order: [[0, 'desc']],
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, -1], ['10', '25', '50', 'Semua']],
+                responsive: false,
+                columnDefs: [{ orderable: false, targets: [6] }],
+                dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>><"table-responsive"rt><"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
+            });
+        }
+    });
+
+    // Template Data for Independent Headers/Footers
+    const EXCEL_INFO = {
+        name: "{{ export_excel_template.header_nama_perusahaan|escapejs|default:'Nama Perusahaan' }}",
+        address: "{{ export_excel_template.header_alamat|escapejs|default:'Alamat Bisnis' }}",
+        phone: "{{ export_excel_template.header_telepon|escapejs|default:'No Telp' }}",
+        email: "Email: {{ export_excel_template.header_email|escapejs|default:'email@domain.com' }}",
+        website: "{{ export_excel_template.header_website|escapejs|default:'' }}",
+        copyright: "{{ export_excel_template.footer_copyright|escapejs|default:'Hak Cipta Dilindungi' }}"
+    };
+
+    const PDF_INFO = {
+        name: "{{ export_pdf_template.header_nama_perusahaan|escapejs|default:'Nama Perusahaan' }}",
+        address: "{{ export_pdf_template.header_alamat|escapejs|default:'Alamat Bisnis' }}",
+        phone: "{{ export_pdf_template.header_telepon|escapejs|default:'No Telp' }}",
+        email: "Email: {{ export_pdf_template.header_email|escapejs|default:'email@domain.com' }}",
+        website: "{{ export_pdf_template.header_website|escapejs|default:'' }}",
+        copyright: "{{ export_pdf_template.footer_copyright|escapejs|default:'Hak Cipta Dilindungi' }}"
+    };
+
+    function exportToExcel() {
+        // Ambil semua tabel di halaman (Pemasukan dan Pengeluaran)
+        const tables = document.querySelectorAll('.table-responsive table');
+        if (tables.length === 0) { alert('Tabel tidak ditemukan!'); return; }
+
+        // Buat tabel HTML untuk Excel (format .xls)
+        let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+        html += '<head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>';
+        html += '<body>';
+
+        // --- ADD EXCEL HEADER (Company Info) ---
+        html += '<table border="0">';
+        if (typeof EXCEL_INFO !== 'undefined') {
+            html += `<tr><td colspan="10" style="text-align:center; font-size:16px; font-weight:bold; color:#5F61E6;">${EXCEL_INFO.name}</td></tr>`;
+            html += `<tr><td colspan="10" style="text-align:center; font-size:12px;">${EXCEL_INFO.address}</td></tr>`;
+            html += `<tr><td colspan="10" style="text-align:center; font-size:12px;">${EXCEL_INFO.phone} | ${EXCEL_INFO.email}</td></tr>`;
+            html += `<tr><td colspan="10"></td></tr>`;
+        }
+        html += '</table>';
+
+        html += '<table border="1">';
+
+        // Ekspor kedua tabel
+        tables.forEach((table, tableIndex) => {
+            // Tambah judul tabel
+            html += '<tr><td colspan="10" style="background-color: #696CFF; color: #FFFFFF; font-weight: bold; font-size: 14px;">';
+            html += tableIndex === 0 ? 'PEMASUKAN (PENJUALAN)' : 'PENGELUARAN (PEMBELIAN & BIAYA)';
+            html += '</td></tr>';
+
+            // Tambah header
+            const headerRow = table.querySelector('thead tr');
+            if (headerRow) {
+                html += '<tr style="background-color: #696CFF; color: #FFFFFF; font-weight: bold;">';
+                headerRow.querySelectorAll('th').forEach((th, index) => {
+                    // Exclude last column (Aksi)
+                    if (index < headerRow.querySelectorAll('th').length - 1 && window.getComputedStyle(th).display !== 'none') {
+                        html += `<th>${th.textContent.trim()}</th>`;
+                    }
+                });
+                html += '</tr>';
+            }
+
+            // Tambah baris data
+            const tbody = table.querySelector('tbody');
+            if (tbody) {
+                tbody.querySelectorAll('tr').forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    if (cells.length === 0 || (cells.length === 1 && cells[0].colSpan > 1)) return;
+
+                    html += '<tr>';
+                    cells.forEach((td, index) => {
+                        // Exclude last column (Aksi)
+                        if (index < cells.length - 1 && window.getComputedStyle(td).display !== 'none') {
+                            html += `<td>${td.textContent.trim().replace(/\s+/g, ' ')}</td>`;
+                        }
+                    });
+                    html += '</tr>';
+                });
+            }
+
+            // Tambah baris RINGKASAN dari tfoot untuk setiap tabel
+            const tfoot = table.querySelector('tfoot');
+            if (tfoot) {
+                const tfootRow = tfoot.querySelector('tr');
+                if (tfootRow) {
+                    html += '<tr style="background-color: #f8f9fa; font-weight: bold;">';
+                    const tfootCells = tfootRow.querySelectorAll('td');
+                    tfootCells.forEach((td, index) => {
+                        // Exclude last column (empty/Aksi)
+                        if (index < tfootCells.length - 1) {
+                            let clone = td.cloneNode(true);
+                            clone.querySelectorAll('small, i').forEach(el => el.remove());
+                            const text = clone.textContent.trim().replace(/\s+/g, ' ');
+                            const colspan = td.getAttribute('colspan') || 1;
+                            html += `<td colspan="${colspan}">${text}</td>`;
+                        }
+                    });
+                    html += '</tr>';
+                }
+            }
+
+            // Tambah spasi antar tabel
+            html += '<tr><td colspan="10">&nbsp;</td></tr>';
+        });
+
+        html += '</table>';
+
+        // --- ADD EXCEL FOOTER ---
+        html += '<table border="0">';
+        html += `<tr><td colspan="10"></td></tr>`; // empty spacer
+        if (typeof EXCEL_INFO !== 'undefined') {
+            html += `<tr><td colspan="10" style="text-align:right; font-size:10px; color:#697A8D;">Dicetak pada: ${new Date().toLocaleString('id-ID')}</td></tr>`;
+            html += `<tr><td colspan="10" style="text-align:right; font-size:10px; color:#697A8D;">${EXCEL_INFO.copyright}</td></tr>`;
+        }
+        html += '</table></body></html>';
+
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        const link = document.createElement('a');
+        link.setAttribute('href', URL.createObjectURL(blob));
+        link.setAttribute('download', 'Laporan_Keuangan_' + new Date().toISOString().slice(0, 10) + '.xls');
+        link.click();
+    }
+
+    function exportToPDF() {
+        if (typeof pdfMake === 'undefined') { alert('pdfMake library tidak tersedia!'); return; }
+        const tables = document.querySelectorAll('.table-responsive table');
+        if (tables.length === 0) { alert('Tabel tidak ditemukan!'); return; }
+
+        const allContent = [];
+
+        tables.forEach((table, tableIndex) => {
+            // Tambah judul tabel
+            const titleText = tableIndex === 0 ? 'PEMASUKAN (PENJUALAN)' : 'PENGELUARAN (PEMBELIAN & BIAYA)';
+            allContent.push({
+                text: titleText,
+                style: 'sectionTitle',
+                margin: [0, tableIndex > 0 ? 20 : 0, 0, 10],
+                fillColor: '#696CFF',
+                color: '#FFFFFF',
+                bold: true
+            });
+
+            // Extract headers
+            const headers = [];
+            const headerRow = table.querySelector('thead tr');
+            if (headerRow) {
+                headerRow.querySelectorAll('th').forEach((th, index) => {
+                    if (index < headerRow.querySelectorAll('th').length - 1 && window.getComputedStyle(th).display !== 'none') {
+                        headers.push({
+                            text: th.textContent.trim(),
+                            style: 'tableHeader',
+                            fillColor: '#696CFF',
+                            color: '#FFFFFF',
+                            bold: true
+                        });
+                    }
+                });
+            }
+
+            const body = [headers];
+
+            // Extract data rows
+            const tbody = table.querySelector('tbody');
+            if (tbody) {
+                tbody.querySelectorAll('tr').forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    if (cells.length === 0 || (cells.length === 1 && cells[0].colSpan > 1)) return;
+
+                    const row = [];
+                    cells.forEach((td, index) => {
+                        if (index < cells.length - 1 && window.getComputedStyle(td).display !== 'none') {
+                            let text = td.textContent.trim().replace(/\s+/g, ' ');
+                            row.push(text);
+                        }
+                    });
+                    if (row.length > 0) body.push(row);
+                });
+            }
+
+            // Tambah baris RINGKASAN dari tfoot
+            const tfoot = table.querySelector('tfoot');
+            if (tfoot) {
+                const tfootRow = tfoot.querySelector('tr');
+                if (tfootRow) {
+                    const summaryRow = [];
+                    const tfootCells = tfootRow.querySelectorAll('td');
+                    let colspanUsed = 0;
+                    tfootCells.forEach((td, index) => {
+                        if (index < tfootCells.length - 1 && colspanUsed < headers.length) {
+                            let clone = td.cloneNode(true);
+                            clone.querySelectorAll('small, i').forEach(el => el.remove());
+                            const text = clone.textContent.trim().replace(/\s+/g, ' ');
+                            const colspan = parseInt(td.getAttribute('colspan') || 1);
+                            summaryRow.push({ text: text, colSpan: colspan, bold: true, fillColor: '#f8f9fa' });
+                            colspanUsed += colspan;
+                            // Tambah sel kosong untuk colspan
+                            for (let i = 1; i < colspan; i++) {
+                                summaryRow.push({});
+                            }
+                        }
+                    });
+                    if (summaryRow.length > 0) body.push(summaryRow);
+                }
+            }
+
+            // Tambah tabel ke konten
+            allContent.push({
+                table: { headerRows: 1, widths: Array(headers.length).fill('auto'), body: body },
+                layout: {
+                    fillColor: (rowIndex) => (rowIndex === 0) ? '#696CFF' : ((rowIndex % 2 === 0) ? '#F5F5F9' : null),
+                    hLineWidth: () => 0.5, vLineWidth: () => 0.5,
+                    hLineColor: () => '#DBDADE', vLineColor: () => '#DBDADE'
+                }
+            });
+        });
+
+        const docDefinition = {
+            pageOrientation: 'landscape',
+            pageMargins: [40, 100, 40, 60],
+            header: function (currentPage) {
+                return {
+                    margin: [40, 20, 40, 10],
+                    columns: [
+                        {
+                            width: '*',
+                            stack: [
+                                { text: PDF_INFO.name, style: 'companyName' },
+                                { text: PDF_INFO.address, style: 'companyInfo' },
+                                { text: PDF_INFO.phone + ' | ' + PDF_INFO.email, style: 'companyInfo' }
+                            ]
+                        },
+                        { width: 'auto', stack: [{ text: 'Halaman ' + currentPage, style: 'pageNumber', alignment: 'right' }] }
+                    ]
+                };
+            },
+            content: [
+                { text: 'LAPORAN KEUANGAN', style: 'documentTitle', margin: [0, 0, 0, 5] },
+                { text: 'Tanggal: ' + new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }), style: 'dateText', margin: [0, 0, 0, 20] },
+                ...allContent
+            ],
+            footer: function (currentPage, pageCount) {
+                return {
+                    margin: [40, 10, 40, 10],
+                    columns: [
+                        { text: 'Dicetak pada: ' + new Date().toLocaleString('id-ID'), style: 'footerText' },
+                        { text: PDF_INFO.copyright, style: 'footerText', alignment: 'right' }
+                    ]
+                }
+            },
+            styles: {
+                companyName: { fontSize: 14, bold: true, color: '#5F61E6' },
+                companyInfo: { fontSize: 9, color: '#697A8D' },
+                pageNumber: { fontSize: 9, color: '#697A8D' },
+                documentTitle: { fontSize: 18, bold: true, color: '#5F61E6' },
+                sectionTitle: { fontSize: 12, bold: true, color: '#FFFFFF' },
+                dateText: { fontSize: 10, color: '#697A8D' },
+                tableHeader: { bold: true, fontSize: 10, color: '#FFFFFF' },
+                footerText: { fontSize: 8, color: '#697A8D' }
+            },
+            defaultStyle: { fontSize: 9 }
+        };
+
+        pdfMake.createPdf(docDefinition).download('Laporan_Keuangan_' + new Date().toISOString().slice(0, 10) + '.pdf');
+    }
+    function applyFilter() {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const cabang = document.getElementById('cabangFilter').value;
+        const metode = document.getElementById('metodeFilter').value;
+        const params = new URLSearchParams();
+        if (startDate) params.set('start_date', startDate);
+        if (endDate) params.set('end_date', endDate);
+        if (cabang) params.set('cabang', cabang);
+        if (metode) params.set('metode_pembayaran', metode);
+        const qs = params.toString();
+        window.location.href = window.location.pathname + (qs ? '?' + qs : '');
+    }
+    function resetFilter() {
+        // Reset column checkboxes ke semua checked
+        document.querySelectorAll('.col-pemasukan-cb, .col-pengeluaran-cb').forEach(cb => { cb.checked = true; });
+        togglePemasukanCols();
+        togglePengeluaranCols();
+        // Reset filter dan reload
+        window.location.href = window.location.pathname;
+    }
+
+    // ===== Column Toggle Pemasukan =====
+    function togglePemasukanCols() {
+        const checkboxes = document.querySelectorAll('.col-pemasukan-cb');
+        if (dtPemasukan) {
+            checkboxes.forEach(cb => {
+                dtPemasukan.column(parseInt(cb.value)).visible(cb.checked);
+            });
+        } else {
+            const table = document.getElementById('tabelPemasukan');
+            if (!table) return;
+            checkboxes.forEach(cb => {
+                const colIndex = parseInt(cb.value);
+                const visible = cb.checked;
+                table.querySelectorAll('thead th').forEach((th, i) => {
+                    if (i === colIndex) th.style.display = visible ? '' : 'none';
+                });
+                table.querySelectorAll('tbody tr').forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells[colIndex]) cells[colIndex].style.display = visible ? '' : 'none';
+                });
+            });
+        }
+    }
+    function selectAllPemasukanCols() {
+        document.querySelectorAll('.col-pemasukan-cb').forEach(cb => { cb.checked = true; });
+        togglePemasukanCols();
+    }
+    function deselectAllPemasukanCols() {
+        document.querySelectorAll('.col-pemasukan-cb').forEach(cb => { cb.checked = false; });
+        togglePemasukanCols();
+    }
+
+    // ===== Column Toggle Pengeluaran =====
+    function togglePengeluaranCols() {
+        const checkboxes = document.querySelectorAll('.col-pengeluaran-cb');
+        if (dtPengeluaran) {
+            checkboxes.forEach(cb => {
+                dtPengeluaran.column(parseInt(cb.value)).visible(cb.checked);
+            });
+        } else {
+            const table = document.getElementById('tabelPengeluaran');
+            if (!table) return;
+            checkboxes.forEach(cb => {
+                const colIndex = parseInt(cb.value);
+                const visible = cb.checked;
+                table.querySelectorAll('thead th').forEach((th, i) => {
+                    if (i === colIndex) th.style.display = visible ? '' : 'none';
+                });
+                table.querySelectorAll('tbody tr').forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells[colIndex]) cells[colIndex].style.display = visible ? '' : 'none';
+                });
+            });
+        }
+    }
+    function selectAllPengeluaranCols() {
+        document.querySelectorAll('.col-pengeluaran-cb').forEach(cb => { cb.checked = true; });
+        togglePengeluaranCols();
+    }
+    function deselectAllPengeluaranCols() {
+        document.querySelectorAll('.col-pengeluaran-cb').forEach(cb => { cb.checked = false; });
+        togglePengeluaranCols();
+    }
+</script>
+<style>
+/* Responsive Summary Cards - Laporan Keuangan */
+.row > [class*="col-6"] > .card {
+    height: 100%;
+}
+.row > [class*="col-6"] > .card > .card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+@media (max-width: 575.98px) {
+    .summary-nominal {
+        font-size: 0.8rem !important;
+        white-space: nowrap;
+    }
+    .card-info .card-text {
+        font-size: 0.68rem;
+        margin-bottom: 0.15rem !important;
+        line-height: 1.2;
+    }
+    .card-info small {
+        font-size: 0.6rem;
+    }
+    .card-body {
+        padding: 0.5rem 0.6rem !important;
+    }
+    .card-icon .badge {
+        padding: 0.25rem !important;
+    }
+    .card-icon .ri-24px {
+        font-size: 14px !important;
+    }
+    .card-info {
+        max-width: calc(100% - 32px);
+    }
+}
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .summary-nominal {
+        font-size: 0.9rem !important;
+    }
+    .card-info .card-text {
+        font-size: 0.72rem;
+    }
+    .card-info small {
+        font-size: 0.62rem;
+    }
+    .card-body {
+        padding: 0.6rem 0.75rem !important;
+    }
+    .card-icon .ri-24px {
+        font-size: 16px !important;
+    }
+}
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .summary-nominal {
+        font-size: 1.05rem !important;
+    }
+}
+</style>
+<script>
+    // Inisialisasi Bootstrap Tooltip
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function(el) {
+            new bootstrap.Tooltip(el, { trigger: 'hover focus click' });
+        });
+    });
+</script>
+{% endblock page_js %}

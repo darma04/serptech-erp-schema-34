@@ -1,0 +1,361 @@
+{
+  "menu": [
+    {
+      "url": "dashboard:index",
+      "name": "Dashboard",
+      "icon": "menu-icon tf-icons ri-home-smile-line",
+      "slug": "dashboard"
+    },
+    {
+      "menu_header": "MASTER DATA",
+      "permission": "produk:view,inventory:view"
+    },
+    {
+      "name": "Produk",
+      "icon": "menu-icon tf-icons ri-box-3-line",
+      "slug": "produk",
+      "submenu": [
+        {
+          "url": "produk:kategori",
+          "name": "Kategori",
+          "slug": "produk-kategori"
+        },
+        {
+          "url": "produk:satuan",
+          "name": "Satuan",
+          "slug": "produk-satuan"
+        },
+        {
+          "url": "produk:list",
+          "name": "Daftar Produk",
+          "slug": "produk-list"
+        },
+        {
+          "url": "produk:tambah",
+          "name": "Tambah Produk",
+          "slug": "produk-tambah"
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "icon": "menu-icon tf-icons ri-store-2-line",
+      "slug": "inventory",
+      "submenu": [
+        {
+          "url": "inventory:gudang",
+          "name": "Gudang",
+          "slug": "inventory-gudang"
+        },
+        {
+          "url": "inventory:stok",
+          "name": "Stok",
+          "slug": "inventory-stok"
+        },
+        {
+          "url": "inventory:transfer",
+          "name": "Transfer Stok",
+          "slug": "inventory-transfer"
+        },
+        {
+          "url": "inventory:adjustment",
+          "name": "Adjustment Stok",
+          "slug": "inventory-adjustment"
+        }
+      ]
+    },
+    {
+      "menu_header": "TRANSAKSI",
+      "permission": "pembelian:view,penjualan:view,pos:view,biaya:view"
+    },
+    {
+      "name": "Pembelian",
+      "icon": "menu-icon tf-icons ri-shopping-cart-line",
+      "slug": "pembelian",
+      "submenu": [
+        {
+          "url": "pembelian:supplier",
+          "name": "Supplier",
+          "slug": "pembelian-supplier"
+        },
+        {
+          "url": "pembelian:purchase-order",
+          "name": "Purchase Order",
+          "slug": "pembelian-po"
+        }
+      ]
+    },
+    {
+      "name": "Penjualan",
+      "icon": "menu-icon tf-icons ri-shopping-bag-line",
+      "slug": "penjualan",
+      "submenu": [
+        {
+          "url": "penjualan:customer",
+          "name": "Customer",
+          "slug": "penjualan-customer"
+        },
+        {
+          "url": "penjualan:sales-order",
+          "name": "Sales Order",
+          "slug": "penjualan-so"
+        },
+        {
+          "url": "penjualan:transaksi",
+          "name": "Transaksi POS",
+          "slug": "penjualan-transaksi"
+        }
+      ]
+    },
+    {
+      "url": "pos:index",
+      "name": "POS / Kasir",
+      "icon": "menu-icon tf-icons ri-cash-line",
+      "slug": "pos"
+    },
+    {
+      "url": "pos:invoice_list",
+      "name": "Invoice",
+      "icon": "menu-icon tf-icons ri-file-list-3-line",
+      "slug": "invoice"
+    },
+    {
+      "name": "Biaya",
+      "icon": "menu-icon tf-icons ri-wallet-line",
+      "slug": "biaya",
+      "submenu": [
+        {
+          "url": "biaya:kategori",
+          "name": "Kategori Biaya",
+          "slug": "biaya-kategori"
+        },
+        {
+          "url": "biaya:transaksi",
+          "name": "Transaksi Biaya",
+          "slug": "biaya-transaksi"
+        }
+      ]
+    },
+    {
+      "menu_header": "HR MANAGEMENT",
+      "permission": "hr:view"
+    },
+    {
+      "name": "HR",
+      "icon": "menu-icon tf-icons ri-team-line",
+      "slug": "hr",
+      "submenu": [
+        {
+          "url": "hr:dashboard",
+          "name": "Dashboard HR",
+          "slug": "hr-dashboard"
+        },
+        {
+          "url": "hr:departemen",
+          "name": "Departemen",
+          "slug": "hr-departemen"
+        },
+        {
+          "url": "hr:jabatan",
+          "name": "Jabatan",
+          "slug": "hr-jabatan"
+        },
+        {
+          "url": "hr:karyawan",
+          "name": "Karyawan",
+          "slug": "hr-karyawan"
+        },
+        {
+          "url": "hr:absensi",
+          "name": "Absensi",
+          "slug": "hr-absensi"
+        },
+        {
+          "url": "hr:penggajian",
+          "name": "Penggajian",
+          "slug": "hr-penggajian"
+        },
+        {
+          "url": "hr:pengaturan-absensi",
+          "name": "Pengaturan Absensi",
+          "slug": "hr-pengaturan-absensi"
+        }
+      ]
+    },
+    {
+      "menu_header": "LAPORAN",
+      "permission": "laporan:view,fraud_detection:view"
+    },
+    {
+      "name": "Laporan",
+      "icon": "menu-icon tf-icons ri-file-chart-line",
+      "slug": "laporan",
+      "submenu": [
+        {
+          "url": "laporan:produk",
+          "name": "Laporan Produk",
+          "slug": "laporan-produk"
+        },
+        {
+          "url": "laporan:stok",
+          "name": "Laporan Stok",
+          "slug": "laporan-stok"
+        },
+        {
+          "url": "laporan:penjualan",
+          "name": "Laporan Penjualan",
+          "slug": "laporan-penjualan"
+        },
+        {
+          "url": "laporan:pembelian",
+          "name": "Laporan Pembelian",
+          "slug": "laporan-pembelian"
+        },
+        {
+          "url": "laporan:keuangan",
+          "name": "Laporan Keuangan",
+          "slug": "laporan-keuangan"
+        }
+      ]
+    },
+    {
+      "name": "Fraud Detection",
+      "icon": "menu-icon tf-icons ri-shield-keyhole-line",
+      "slug": "fraud-detection",
+      "submenu": [
+        {
+          "url": "fraud_detection:dashboard",
+          "name": "Dashboard Fraud",
+          "slug": "fraud-dashboard"
+        },
+        {
+          "url": "fraud_detection:alert_list",
+          "name": "Daftar Anomali",
+          "slug": "fraud-anomali"
+        },
+        {
+          "url": "fraud_detection:cash_list",
+          "name": "Rekonsiliasi Kas",
+          "slug": "fraud-kas"
+        },
+        {
+          "url": "fraud_detection:settings",
+          "name": "Pengaturan Fraud",
+          "slug": "fraud-pengaturan"
+        }
+      ]
+    },
+    {
+      "menu_header": "AUTOMASI",
+      "permission": "automation:view"
+    },
+    {
+      "name": "Telegram",
+      "icon": "menu-icon tf-icons ri-telegram-line",
+      "slug": "automation",
+      "submenu": [
+        {
+          "url": "automation:pengaturan_telegram",
+          "name": "Pengaturan Bot",
+          "slug": "automation-pengaturan"
+        },
+        {
+          "url": "automation:template_pesan_list",
+          "name": "Template Pesan",
+          "slug": "automation-template"
+        },
+        {
+          "url": "automation:log_notifikasi",
+          "name": "Log Notifikasi",
+          "slug": "automation-log"
+        }
+      ]
+    },
+    {
+      "menu_header": "AI",
+      "permission": "ai_assistant:view"
+    },
+    {
+      "name": "AI Manajemen",
+      "icon": "menu-icon tf-icons ri-robot-2-line",
+      "slug": "ai-assistant",
+      "submenu": [
+        {
+          "url": "ai_assistant:dashboard",
+          "name": "AI Dashboard",
+          "slug": "ai-dashboard"
+        },
+        {
+          "url": "ai_assistant:index",
+          "name": "AI Assistant",
+          "slug": "ai-assistant-settings"
+        }
+      ]
+    },
+    {
+      "menu_header": "PENGATURAN",
+      "permission": "user_management:view,access_control:view,activity_log:view,pengaturan:view"
+    },
+    {
+      "url": "user_management:index",
+      "name": "Manajemen User",
+      "icon": "menu-icon tf-icons ri-user-settings-line",
+      "slug": "users"
+    },
+    {
+      "name": "Access Control",
+      "icon": "menu-icon tf-icons ri-shield-user-line",
+      "slug": "access-control",
+      "submenu": [
+        {
+          "url": "permission_management:role_list",
+          "name": "Roles",
+          "slug": "access-roles"
+        },
+        {
+          "url": "permission_management:permission_list",
+          "name": "Permissions",
+          "slug": "access-permissions"
+        }
+      ]
+    },
+    {
+      "url": "activity_log:index",
+      "name": "Log Aktivitas",
+      "icon": "menu-icon tf-icons ri-history-line",
+      "slug": "activity-log"
+    },
+    {
+      "name": "Pengaturan",
+      "icon": "menu-icon tf-icons ri-settings-3-line",
+      "slug": "pengaturan",
+      "submenu": [
+        {
+          "url": "pengaturan:profil",
+          "name": "Profil Saya",
+          "slug": "pengaturan-profil"
+        },
+        {
+          "url": "pengaturan:perusahaan",
+          "name": "Pengaturan Perusahaan",
+          "slug": "pengaturan-perusahaan"
+        },
+        {
+          "url": "pengaturan:metode_pembayaran_list",
+          "name": "Metode Pembayaran",
+          "slug": "pengaturan-metode-pembayaran"
+        },
+        {
+          "url": "pengaturan:template_cetak_list",
+          "name": "Template Cetak",
+          "slug": "pengaturan-template-cetak"
+        },
+        {
+          "url": "pengaturan:manajemen_data",
+          "name": "Manajemen Data",
+          "slug": "pengaturan-manajemen-data"
+        }
+      ]
+    }
+  ]
+}

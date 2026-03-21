@@ -1,0 +1,1015 @@
+"""
+==========================================================================
+PRODUK VIEWS - Views untuk Modul Produk (Kategori, Satuan, Produk)
+==========================================================================
+File ini berisi semua view (controller) untuk modul Produk.
+Menggunakan Django Class-Based Views (CBV) dengan permission mixins.
+
+Pola view yang digunakan (setiap entitas punya 4 view CRUD):
+- ListView → Menampilkan daftar data
+- CreateView → Form tambah data baru
+- UpdateView → Form edit data yang sudah ada
+- DeleteView → Hapus data (via AJAX)
+
+View yang tersedia:
+[Kategori] KategoriListView, KategoriCreateView, KategoriUpdateView, KategoriDeleteView
+[Satuan]   SatuanListView, SatuanCreateView, SatuanUpdateView, SatuanDeleteView
+[Produk]   ProdukListView, ProdukCreateView, ProdukUpdateView, ProdukDeleteView, ProdukImportView
+
+Konsep penting:
+1. SubModulePermissionMixin → Setiap view dicek permission di level sub-modul
+2. TemplateLayout.init() → Menginisialisasi layout template (sidebar, header)
+3. reverse_lazy() → URL redirect yang dievaluasi saat runtime (bukan saat import)
+4. JsonResponse → Untuk delete via AJAX (tanpa reload halaman)
+
+Koneksi:
+- apps/core/mixins.py → SubModulePermissionMixin untuk pengecekan permission
+- apps/produk/models.py → Model Kategori, Satuan, Produk, Gudang, Stok
+- apps/produk/forms.py → ProdukForm untuk form create/update produk
+- apps/produk/urls.py → URL routing yang mengarah ke view ini
+- web_project/__init__.py → TemplateLayout untuk layout management
+==========================================================================
+"""
+
+# Import dari framework Django
+from django.shortcuts import render
+from django.db.models import ProtectedError                                    # Fungsi render template
+# Import dari framework Django
+from django.contrib.auth.decorators import login_required              # Decorator login wajib
+# Import dari framework Django
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView  # CBV bawaan Django
+# Import dari framework Django
+from django.urls import reverse_lazy                                   # URL reverse yang lazy-evaluated
+# Import dari framework Django
+from django.contrib import messages                                    # Framework pesan flash
+# Import dari framework Django
+from django.utils.decorators import method_decorator                   # Decorator untuk CBV
+# Import dari framework Django
+from django.http import JsonResponse                                   # Response JSON untuk AJAX
+from web_project import TemplateLayout                                 # Layout template manager
+# Import dari modul internal proyek
+from apps.produk.models import Kategori, Satuan, Produk, Gudang, Stok  # Model database
+# Import dari modul internal proyek
+from apps.produk.forms import ProdukForm                               # Form produk
+# Import dari modul internal proyek
+from apps.core.mixins import (                                         # Permission mixins
+    ReadPermissionMixin, CreatePermissionMixin,
+    UpdatePermissionMixin, DeletePermissionMixin,
+    SubModulePermissionMixin
+)
+import logging  # Modul logging standar Python - pengganti print() untuk production
+from django.db import transaction
+
+# Inisialisasi logger untuk modul Produk
+logger = logging.getLogger(__name__)
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+# ║                    CRUD KATEGORI                              ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+class KategoriListView(SubModulePermissionMixin, ListView):
+    paginate_by = 50
+    """
+    Menampilkan daftar semua kategori produk.
+
+    URL: /produk/kategori/
+    Permission: produk.kategori.read
+    Template: produk/kategori_list.html
+    """
+    model = Kategori                              # Model yang ditampilkan
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/kategori_list.html'   # Template HTML
+    context_object_name = 'kategori_list'         # Nama variabel di template
+
+    # Permission configuration
+    permission_module = 'produk'                  # Modul: produk
+    permission_sub_module = 'kategori'            # Sub-modul: kategori
+    permission_action = 'read'                    # Aksi: baca/lihat
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data tambahan ke template context."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: total_kategori - untuk ditampilkan di template
+        context['total_kategori'] = self.get_queryset().count()  # Untuk summary/export
+        return context
+
+
+class KategoriCreateView(SubModulePermissionMixin, CreateView):
+    """
+    Form untuk menambahkan kategori baru.
+
+    URL: /produk/kategori/add/
+    Permission: produk.kategori.create
+    Template: produk/kategori_form.html
+    """
+    model = Kategori
+    fields = ['nama', 'deskripsi']                    # Field yang ditampilkan di form
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/kategori_form.html'
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:kategori')     # Redirect setelah berhasil
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'kategori'
+    permission_action = 'create'
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data konteks tambahan ke template."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: title - untuk ditampilkan di template
+        context['title'] = 'Tambah Kategori'
+        return context
+
+
+    def form_valid(self, form):
+
+
+        """
+        Dipanggil saat form valid (validasi berhasil).
+        Set field dibuat_oleh ke user yang sedang login.
+        """
+        form.instance.dibuat_oleh = self.request.user  # Set pembuat = user login
+        # Tampilkan pesan sukses ke user
+        messages.success(self.request, 'Kategori berhasil ditambahkan')
+        return super().form_valid(form)
+
+
+class KategoriUpdateView(SubModulePermissionMixin, UpdateView):
+    """
+    Form untuk mengedit kategori yang sudah ada.
+
+    URL: /produk/kategori/<pk>/edit/
+    Permission: produk.kategori.write
+    """
+    model = Kategori
+    fields = ['nama', 'deskripsi']
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/kategori_form.html'
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:kategori')
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'kategori'
+    permission_action = 'write'  # 'write' = alias untuk 'update' di permission system
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data konteks tambahan ke template."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: title - untuk ditampilkan di template
+        context['title'] = 'Edit Kategori'
+        return context
+
+
+    def form_valid(self, form):
+
+        """Dipanggil saat form valid - proses penyimpanan data."""
+        messages.success(self.request, 'Kategori berhasil diupdate')
+        return super().form_valid(form)
+
+
+class KategoriDeleteView(SubModulePermissionMixin, DeleteView):
+    """
+    Menghapus kategori via AJAX.
+
+    URL: /produk/kategori/<pk>/delete/
+    Permission: produk.kategori.delete
+    Response: JSON (bukan HTML) karena dipanggil via AJAX dari frontend
+    """
+    model = Kategori
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:kategori')
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'kategori'
+    permission_action = 'delete'
+
+    def delete(self, request, *args, **kwargs):
+        """
+        Override delete() untuk mengembalikan JSON response (bukan HTML).
+
+        Kenapa JSON?
+        - Frontend menggunakan AJAX (JavaScript) untuk menghapus data
+        - Tidak perlu reload halaman → UX lebih baik
+        - Frontend menangani response JSON untuk menampilkan notifikasi
+        """
+        from django.http import JsonResponse
+        self.object = self.get_object()
+
+        # Blok penanganan error - coba jalankan kode di bawah
+        try:
+            kategori_name = self.object.nama
+            self.object.delete()
+            return JsonResponse({
+                'success': True,
+                'message': f'Kategori {kategori_name} berhasil dihapus'
+            })
+        # Tangkap error Exception - lanjutkan tanpa crash
+        except ProtectedError:
+            return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Gagal menghapus kategori: {str(e)}'
+            }, status=400)
+
+
+    # ╔══════════════════════════════════════════════════════════════╗
+    # ║                      CRUD SATUAN                              ║
+    # ╚══════════════════════════════════════════════════════════════╝
+
+class SatuanListView(SubModulePermissionMixin, ListView):
+    paginate_by = 50
+    """Menampilkan daftar semua satuan. URL: /produk/satuan/"""
+    model = Satuan
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/satuan_list.html'
+    context_object_name = 'satuan_list'
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'satuan'
+    permission_action = 'read'
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data konteks tambahan ke template."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: total_satuan - untuk ditampilkan di template
+        context['total_satuan'] = self.get_queryset().count()
+        return context
+
+
+class SatuanCreateView(SubModulePermissionMixin, CreateView):
+    """Form tambah satuan baru. URL: /produk/satuan/add/"""
+    model = Satuan
+    fields = ['nama', 'singkatan']
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/satuan_form.html'
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:satuan')
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'satuan'
+    permission_action = 'create'
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data konteks tambahan ke template."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: title - untuk ditampilkan di template
+        context['title'] = 'Tambah Satuan'
+        return context
+
+
+    def form_valid(self, form):
+
+        """Dipanggil saat form valid - proses penyimpanan data."""
+        messages.success(self.request, 'Satuan berhasil ditambahkan')
+        return super().form_valid(form)
+
+
+class SatuanUpdateView(SubModulePermissionMixin, UpdateView):
+    """Form edit satuan. URL: /produk/satuan/<pk>/edit/"""
+    model = Satuan
+    fields = ['nama', 'singkatan']
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/satuan_form.html'
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:satuan')
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'satuan'
+    permission_action = 'write'
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data konteks tambahan ke template."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: title - untuk ditampilkan di template
+        context['title'] = 'Edit Satuan'
+        return context
+
+
+    def form_valid(self, form):
+
+        """Dipanggil saat form valid - proses penyimpanan data."""
+        messages.success(self.request, 'Satuan berhasil diupdate')
+        return super().form_valid(form)
+
+
+class SatuanDeleteView(SubModulePermissionMixin, DeleteView):
+    """Hapus satuan via AJAX. URL: /produk/satuan/<pk>/delete/"""
+    model = Satuan
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:satuan')
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'satuan'
+    permission_action = 'delete'
+
+    def delete(self, request, *args, **kwargs):
+        """Hapus data - return JSON response untuk AJAX."""
+        from django.http import JsonResponse
+        self.object = self.get_object()
+
+        # Blok penanganan error - coba jalankan kode di bawah
+        try:
+            satuan_name = self.object.nama
+            self.object.delete()
+            return JsonResponse({
+                'success': True,
+                'message': f'Satuan {satuan_name} berhasil dihapus'
+            })
+        # Tangkap error Exception - lanjutkan tanpa crash
+        except ProtectedError:
+            return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Gagal menghapus satuan: {str(e)}'
+            }, status=400)
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+        # ║                      CRUD PRODUK                              ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+class ProdukListView(SubModulePermissionMixin, ListView):
+    paginate_by = 50
+    """
+    Menampilkan daftar semua produk dengan informasi lengkap.
+
+    URL: /produk/list/
+    Permission: produk.daftar_produk.read
+
+    Fitur:
+    - Prefetch stok → mengurangi jumlah query (N+1 problem)
+    - Menghitung total produk, stok, nilai beli, nilai jual
+    """
+    model = Produk
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/produk_list.html'
+    context_object_name = 'produk_list'
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'daftar_produk'  # Sesuai SUB_MODULE_CHOICES di RolePermission
+    permission_action = 'read'
+
+    def get_queryset(self):
+        """
+        Override queryset untuk optimasi query database.
+
+        prefetch_related() → mengambil data relasi many-to-many/reverse FK dalam 1 query
+        select_related() → mengambil data relasi FK dalam 1 JOIN query
+
+        Tanpa optimasi: 1 query produk + N query stok + N query gudang = N*2+1 query
+        Dengan optimasi: 3 query saja (produk, stok+gudang, kategori+satuan)
+        """
+        return Produk.objects.prefetch_related(
+            'stok_set',           # Prefetch semua stok (reverse FK)
+            'stok_set__gudang'    # Prefetch gudang dari setiap stok
+        ).select_related(
+            'kategori',           # JOIN kategori
+            'satuan',             # JOIN satuan
+            'cabang'              # JOIN gudang cabang
+        )
+
+    def get_context_data(self, **kwargs):
+        """Menghitung data summary untuk template (total produk, stok, nilai)."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: produk_list - untuk ditampilkan di template
+        produk_list = context['produk_list']
+
+        # Daftar gudang aktif (untuk filter dropdown)
+        context['gudang_list'] = Gudang.objects.filter(aktif=True)
+
+        # Hitung total untuk tabel summary dan export
+        total_produk = 0
+        total_stok = 0
+        total_nilai_beli = 0
+        total_nilai_jual = 0
+
+        for produk in produk_list:
+            total_produk += 1
+            stok = produk.stok_total
+            total_stok += stok
+            total_nilai_beli += produk.harga_beli * stok
+            total_nilai_jual += produk.harga_jual * stok
+
+        # Data konteks: total_produk - untuk ditampilkan di template
+        context['total_produk'] = total_produk
+        # Data konteks: total_stok - untuk ditampilkan di template
+        context['total_stok'] = total_stok
+        # Data konteks: total_nilai_beli - untuk ditampilkan di template
+        context['total_nilai_beli'] = total_nilai_beli
+        # Data konteks: total_nilai_jual - untuk ditampilkan di template
+        context['total_nilai_jual'] = total_nilai_jual
+
+        return context
+
+
+class ProdukCreateView(SubModulePermissionMixin, CreateView):
+    """
+    Form untuk menambahkan produk baru.
+
+    URL: /produk/tambah/
+    Permission: produk.tambah_produk.create
+
+    Fitur khusus:
+    - Auto-generate SKU jika kosong
+    - Handle stok awal (buat record Stok di gudang default)
+    """
+    model = Produk
+    form_class = ProdukForm    # Menggunakan custom form (bukan fields=[...])
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/produk_form.html'
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:list')
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'tambah_produk'
+    permission_action = 'create'
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data konteks tambahan ke template."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: title - untuk ditampilkan di template
+        context['title'] = 'Tambah Produk'
+        return context
+
+
+    def form_valid(self, form):
+
+        """
+        Setelah form valid:
+        1. Set pembuat = user login
+        2. Simpan produk
+        3. Handle stok awal (jika ada input stok_awal di form)
+        """
+        form.instance.dibuat_oleh = self.request.user
+        response = super().form_valid(form)
+
+        # ===== HANDLE STOK AWAL =====
+        # stok_awal bukan field di model, tapi input tambahan di form HTML
+        stok_awal = self.request.POST.get('stok_awal')
+        if stok_awal and float(stok_awal) > 0:
+            # Tentukan gudang: dari cabang yang dipilih, atau gudang default
+            gudang = form.instance.cabang
+            if not gudang:
+                # Query database - ambil data gudang yang sesuai filter
+                gudang = Gudang.objects.filter(aktif=True).first()
+                if not gudang:
+                    # Buat gudang default jika belum ada
+                    gudang = Gudang.objects.create(
+                        kode='GD-DEFAULT',
+                        nama='Gudang Utama',
+                        aktif=True
+                    )
+
+            # Buat atau update record Stok
+            # update_or_create() → cari berdasarkan produk+gudang, update/create jumlah
+            Stok.objects.update_or_create(
+                produk=form.instance,
+                gudang=gudang,
+                defaults={'jumlah': float(stok_awal)}
+            )
+
+        # Tampilkan pesan sukses ke user
+        messages.success(self.request, 'Produk berhasil ditambahkan')
+        return response
+
+
+class ProdukUpdateView(SubModulePermissionMixin, UpdateView):
+    """
+    Form untuk mengedit produk yang sudah ada.
+
+    URL: /produk/<pk>/edit/
+    Permission: produk.write (level modul, tanpa sub_module spesifik)
+
+    Fitur:
+    - Menampilkan stok per-cabang (gudang) di form edit
+    - Bisa edit stok masing-masing cabang secara terpisah
+    - Data stok terhubung dengan Transfer Stok & Adjustment Stok
+    """
+    model = Produk
+    form_class = ProdukForm
+    # Template HTML yang digunakan untuk render halaman
+    template_name = 'produk/produk_form.html'
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:list')
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_action = 'write'
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data konteks tambahan ke template, termasuk stok per-cabang."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Data konteks: title - untuk ditampilkan di template
+        context['title'] = 'Edit Produk'
+
+        # ===== STOK PER-CABANG =====
+        # Ambil semua record Stok untuk produk ini (di semua gudang)
+        stok_queryset = Stok.objects.filter(
+            produk=self.object
+        ).select_related('gudang').order_by('gudang__nama')
+
+        stok_per_cabang = []
+        total_stok = 0
+        for stok_item in stok_queryset:
+            stok_per_cabang.append({
+                'gudang_id': stok_item.gudang.id,
+                'gudang_kode': stok_item.gudang.kode,
+                'gudang_nama': stok_item.gudang.nama,
+                'jumlah': stok_item.jumlah,
+            })
+            total_stok += stok_item.jumlah
+
+        # Data konteks: stok_per_cabang - untuk ditampilkan di template
+        context['stok_per_cabang'] = stok_per_cabang
+        # Data konteks: total_stok - untuk ditampilkan di template
+        context['total_stok'] = total_stok
+
+        # Backward compat: stok_saat_ini untuk fallback
+        if stok_per_cabang:
+            # Data konteks: stok_saat_ini - untuk ditampilkan di template
+            context['stok_saat_ini'] = total_stok
+
+        return context
+
+
+    def form_valid(self, form):
+
+        """Handle update stok per-cabang dari input form."""
+        response = super().form_valid(form)
+
+        # ===== SIMPAN STOK PER-CABANG =====
+        # Cek apakah ada input stok per-cabang (stok_cabang_{gudang_id})
+        has_per_cabang_input = False
+        for key in self.request.POST:
+            if key.startswith('stok_cabang_'):
+                has_per_cabang_input = True
+                gudang_id = key.replace('stok_cabang_', '')
+                stok_value = self.request.POST.get(key, '').strip()
+                if stok_value:
+                    # Blok penanganan error - coba jalankan kode di bawah
+                    try:
+                        jumlah = float(stok_value)
+                        Stok.objects.update_or_create(
+                            produk=form.instance,
+                            gudang_id=int(gudang_id),
+                            defaults={'jumlah': jumlah}
+                        )
+                    # Tangkap error (ValueError, TypeError) - lanjutkan tanpa crash
+                    except (ValueError, TypeError):
+                        pass  # Abaikan input tidak valid
+
+        # Fallback: jika tidak ada input per-cabang, gunakan stok_awal tunggal
+        if not has_per_cabang_input:
+            stok_input = self.request.POST.get('stok_awal')
+            if stok_input:
+                gudang = form.instance.cabang
+                if not gudang:
+                    # Query database - ambil data gudang yang sesuai filter
+                    gudang = Gudang.objects.filter(aktif=True).first()
+                    if not gudang:
+                        # Buat record baru di database
+                        gudang = Gudang.objects.create(
+                            kode='GD-DEFAULT',
+                            nama='Gudang Utama',
+                            aktif=True
+                        )
+
+                Stok.objects.update_or_create(
+                    produk=form.instance,
+                    gudang=gudang,
+                    defaults={'jumlah': float(stok_input)}
+                )
+
+        # Tampilkan pesan sukses ke user
+        messages.success(self.request, 'Produk berhasil diupdate')
+        return response
+
+
+class ProdukDeleteView(SubModulePermissionMixin, DeleteView):
+    """Hapus produk via AJAX. URL: /produk/<pk>/delete/"""
+    model = Produk
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('produk:list')
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_action = 'delete'
+
+    def delete(self, request, *args, **kwargs):
+        """Hapus data - return JSON response untuk AJAX."""
+        from django.http import JsonResponse
+        self.object = self.get_object()
+
+        # Blok penanganan error - coba jalankan kode di bawah
+        try:
+            produk_name = self.object.nama
+            self.object.delete()
+            return JsonResponse({
+                'success': True,
+                'message': f'Produk {produk_name} berhasil dihapus'
+            })
+        # Tangkap error Exception - lanjutkan tanpa crash
+        except ProtectedError:
+            return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Gagal menghapus produk: {str(e)}'
+            }, status=400)
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+                # ║                   IMPORT PRODUK (CSV/EXCEL)                   ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+class ProdukImportView(SubModulePermissionMixin, TemplateView):
+    """
+    Halaman import produk dari file CSV atau Excel.
+
+    URL: /produk/import/
+    Permission: produk.produk_import.create
+
+    Mendukung format:
+    - CSV (.csv) → Dengan auto-detect delimiter (koma, titik koma, tab)
+    - Excel (.xlsx, .xls) → Parse HTML table (format export dari sistem)
+
+    Alur import:
+    1. User upload file CSV/Excel
+    2. Sistem parsing file → ambil data per baris
+    3. Untuk setiap baris: buat/cari Kategori & Satuan → buat Produk
+    4. Return summary: berapa berhasil, berapa gagal + alasan error
+    """
+    template_name = 'produk/produk_import.html'
+    # Modul permission yang dicek: 'produk'
+    permission_module = 'produk'
+    permission_sub_module = 'produk_import'
+    permission_action = 'create'
+
+    def get_context_data(self, **kwargs):
+        """Menambahkan data konteks tambahan ke template."""
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        # Query database - ambil semua data context['kategori_list']
+        # Data konteks: kategori_list - untuk ditampilkan di template
+        context['kategori_list'] = Kategori.objects.all()  # Untuk referensi di template
+        # Query database - ambil semua data context['satuan_list']
+        # Data konteks: satuan_list - untuk ditampilkan di template
+        context['satuan_list'] = Satuan.objects.all()
+        return context
+
+
+    def post(self, request, *args, **kwargs):
+
+        """
+        Proses upload dan import file (POST).
+
+        Tahapan:
+        1. Validasi: file ada? format didukung?
+        2. Parse file (CSV atau HTML/Excel)
+        3. Loop setiap baris → buat produk
+        4. Return summary (jumlah berhasil/gagal)
+        """
+        # Cek apakah request dari AJAX (JavaScript)
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        # Validasi: file harus ada
+        if 'file' not in request.FILES:
+            if is_ajax:
+                # Kembalikan respons JSON gagal ke klien
+                return JsonResponse({'success': False, 'message': 'Tidak ada file yang diupload!'})
+            # Tampilkan pesan error ke user
+            messages.error(request, 'Tidak ada file yang diupload!')
+            return self.get(request, *args, **kwargs)
+
+        file = request.FILES['file']
+        file_name = file.name.lower()
+
+        # Validasi: format file
+        if not (file_name.endswith('.csv') or file_name.endswith('.xlsx') or file_name.endswith('.xls')):
+            if is_ajax:
+                # Kembalikan respons JSON gagal ke klien
+                return JsonResponse({'success': False, 'message': 'Format file tidak didukung! Gunakan CSV atau Excel.'})
+            # Tampilkan pesan error ke user
+            messages.error(request, 'Format file tidak didukung! Gunakan CSV atau Excel.')
+            return self.get(request, *args, **kwargs)
+
+        # Blok penanganan error - coba jalankan kode di bawah
+        try:
+            import io
+            import csv
+
+            if file_name.endswith('.csv'):
+                # ===== PARSE CSV =====
+                # Decode file CSV (handle BOM untuk file dari Windows)
+                decoded_file = file.read().decode('utf-8-sig')
+
+                # Skip 'sep=,' directive jika ada (dari Excel)
+                lines = decoded_file.splitlines()
+                if lines and lines[0].strip().startswith('sep='):
+                    decoded_file = '\\n'.join(lines[1:])
+
+                # Auto-detect delimiter (koma, titik koma, tab)
+                # Beberapa negara pakai titik koma sebagai pemisah kolom
+                io_string = io.StringIO(decoded_file)
+                sample = io_string.read(1024)
+                io_string.seek(0)
+
+                # Blok penanganan error - coba jalankan kode di bawah
+                try:
+                    sniffer = csv.Sniffer()
+                    dialect = sniffer.sniff(sample, delimiters=',;\t')
+                    delimiter = dialect.delimiter
+                # Tangkap error Exception - lanjutkan tanpa crash
+                except Exception:
+                    delimiter = ','  # Default: koma
+
+                reader = csv.DictReader(io_string, delimiter=delimiter)
+                rows = list(reader)  # Konversi ke list of dict
+
+            else:
+                # ===== PARSE EXCEL (HTML format) =====
+                # File Excel export dari sistem ini menggunakan format HTML table
+                try:
+                    file.seek(0)
+                    content_bytes = file.read()
+
+                    # Coba decode dengan berbagai encoding
+                    encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
+                    html_content = None
+
+                    for enc in encodings:
+                        # Blok penanganan error - coba jalankan kode di bawah
+                        try:
+                            html_content = content_bytes.decode(enc)
+                            break
+                        # Tangkap error UnicodeDecodeError - lanjutkan tanpa crash
+                        except UnicodeDecodeError:
+                            continue
+
+                    if not html_content:
+                        raise ValueError("Could not decode file")
+
+                    # Parse HTML menggunakan BeautifulSoup
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(html_content, 'html.parser')
+
+                    # Cek apakah frameset (export Excel multi-file)
+                    frameset = soup.find('frameset')
+                    if frameset:
+                        frames = soup.find_all('frame')
+                        sheet_file = None
+                        for frame in frames:
+                            src = frame.get('src', '')
+                            if 'sheet' in src.lower() and src.endswith('.htm'):
+                                sheet_file = src
+                                break
+
+                        if not sheet_file:
+                            raise ValueError("File export menggunakan frameset tapi tidak ditemukan sheet data. Gunakan template CSV atau konversi ke format sederhana.")
+                        raise ValueError("File export ini memiliki format frameset Excel. Silakan gunakan 'Download Template CSV' atau export ulang ke format yang lebih sederhana.")
+
+                    # Cari table di HTML
+                    table = soup.find('table')
+
+                    if not table:
+                        # Fallback: cari dengan regex
+                        import re
+                        table_match = re.search(r'<table[^>]*>(.*?)</table>', html_content, re.DOTALL | re.IGNORECASE)
+                        if table_match:
+                            soup = BeautifulSoup(table_match.group(0), 'html.parser')
+                            table = soup.find('table')
+
+                    if not table:
+                        raise ValueError("Tidak ditemukan tabel dalam file. Pastikan file adalah hasil export atau template yang valid.")
+
+                    # Ekstrak header
+                    headers = []
+                    header_row = table.find('thead')
+                    if header_row:
+                        headers = [th.get_text(strip=True).lower() for th in header_row.find_all('th')]
+                    else:
+                        first_row = table.find('tr')
+                        if first_row:
+                            headers = [td.get_text(strip=True).lower() for td in first_row.find_all(['th', 'td'])]
+
+                    if not headers or 'nama' not in headers:
+                        raise ValueError(f"Header tidak valid atau kolom 'nama' tidak ditemukan. Headers ditemukan: {headers}")
+
+                    # Ekstrak baris data
+                    rows = []
+                    rows_iter = table.find_all('tr')
+                    if header_row:
+                        rows_iter = table.find('tbody').find_all('tr') if table.find('tbody') else rows_iter[1:]
+                    else:
+                        rows_iter = rows_iter[1:]  # Skip header row
+
+                    for tr in rows_iter:
+                        cells = tr.find_all(['td', 'th'])
+                        if not cells:
+                            continue
+
+                        # Skip baris kosong
+                        row_text = ''.join([cell.get_text(strip=True) for cell in cells])
+                        if not row_text or row_text.replace('\xa0', '').strip() == '':
+                            continue
+
+                        row_data = {}
+                        for idx, cell in enumerate(cells):
+                            if idx < len(headers):
+                                cell_text = cell.get_text(strip=True).replace('\xa0', '').strip()
+                                row_data[headers[idx]] = cell_text if cell_text else ''
+
+                        # Hanya tambahkan baris yang punya nama produk
+                        if row_data.get('nama', '').strip():
+                            rows.append(row_data)
+
+                # Tangkap error Exception - lanjutkan tanpa crash
+                except ProtectedError:
+                    return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
+                except Exception as e:
+                    # Catat error parsing HTML ke log - tidak menghentikan proses
+                    logger.warning("HTML parsing error saat import produk: %s", e)
+                    if is_ajax:
+                        # Kembalikan respons JSON gagal ke klien
+                        return JsonResponse({'success': False, 'message': f'Gagal membaca file: {str(e)}'})
+                    # Tampilkan pesan error ke user
+                    messages.error(request, f'Gagal membaca file: {str(e)}')
+                    return self.get(request, *args, **kwargs)
+
+            # ===== PROSES SETIAP BARIS DATA =====
+            success_count = 0
+            error_count = 0
+            errors = []
+
+            for idx, row in enumerate(rows, start=2):  # Mulai dari 2 (baris 1 = header)
+                # Blok penanganan error - coba jalankan kode di bawah
+                try:
+                    # Ambil atau buat Kategori (get_or_create)
+                    kategori = None
+                    if 'kategori' in row and row['kategori']:
+                        kategori, _ = Kategori.objects.get_or_create(
+                            nama=str(row['kategori']).strip(),
+                            defaults={'dibuat_oleh': request.user}
+                        )
+
+                    # Ambil atau buat Satuan (get_or_create)
+                    satuan_nama = str(row.get('satuan', 'pcs')).strip()
+                    satuan, _ = Satuan.objects.get_or_create(
+                        nama=satuan_nama,
+                        defaults={'singkatan': satuan_nama[:3].upper()}
+                    )
+
+                    # Cek duplikasi SKU
+                    sku = str(row.get('sku', '')).strip() if row.get('sku') else None
+                    # Query database - ambil data if sku and Produk.objects.filter(sku yang sesuai filter
+                    if sku and Produk.objects.filter(sku=sku).exists():
+                        errors.append(f"Baris {idx}: SKU '{sku}' sudah ada")
+                        error_count += 1
+                        continue
+
+                    # Buat produk baru
+                    produk = Produk.objects.create(
+                        sku=sku or '',
+                        nama=str(row['nama']).strip(),
+                        deskripsi=str(row.get('deskripsi', '')).strip() if row.get('deskripsi') else '',
+                        kategori=kategori,
+                        satuan=satuan,
+                        harga_beli=float(row.get('harga_beli', 0) or 0),
+                        harga_jual=float(row.get('harga_jual', 0) or 0),
+                        barcode=str(row.get('barcode', '')).strip() if row.get('barcode') else '',
+                        aktif=True,
+                        dibuat_oleh=request.user
+                    )
+
+                    # Tangani stok jika ada di file import
+                    stok_value = row.get('stok', None)
+                    if stok_value is not None and str(stok_value).strip():
+                        # Blok penanganan error - coba jalankan kode di bawah
+                        try:
+                            stok_jumlah = float(str(stok_value).strip())
+                            if stok_jumlah > 0:
+                                # Import dari modul internal proyek
+                                from apps.inventory.models import Gudang, Stok
+                                # Query database - ambil data gudang yang sesuai filter
+                                gudang = Gudang.objects.filter(aktif=True).first()
+                                if not gudang:
+                                    # Buat record baru di database
+                                    gudang = Gudang.objects.create(
+                                        kode='GD-DEFAULT',
+                                        nama='Gudang Utama',
+                                        aktif=True
+                                    )
+                                Stok.objects.update_or_create(
+                                    produk=produk,
+                                    gudang=gudang,
+                                    defaults={'jumlah': stok_jumlah}
+                                )
+                        # Tangkap error (ValueError, TypeError) - lanjutkan tanpa crash
+                        except (ValueError, TypeError):
+                            pass  # Abaikan nilai stok yang tidak valid
+
+                    success_count += 1
+
+                # Tangkap error KeyError - lanjutkan tanpa crash
+                except KeyError as e:
+                    errors.append(f"Baris {idx}: Kolom {str(e)} tidak ditemukan")
+                    error_count += 1
+                # Tangkap error Exception - lanjutkan tanpa crash
+                except ProtectedError:
+                    return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
+                except Exception as e:
+                    errors.append(f"Baris {idx}: {str(e)}")
+                    error_count += 1
+
+            # ===== BUAT PESAN RESPONSE =====
+            success_msg = ''
+            error_msg = ''
+
+            if success_count > 0:
+                success_msg = f'<strong>Berhasil import {success_count} produk!</strong>'
+
+            if error_count > 0:
+                error_details = '<br>'.join(errors[:5]) if len(errors) <= 5 else '<br>'.join(errors[:5]) + f'<br>... dan {len(errors)-5} error lainnya'
+                error_msg = f'<br><strong>{error_count} produk gagal diimport</strong><br><small>{error_details}</small>'
+
+            final_message = success_msg + error_msg
+
+            # Kembalikan response sesuai tipe request (AJAX atau biasa)
+            if is_ajax:
+                if success_count > 0:
+                    # Kembalikan respons JSON sukses ke klien
+                    return JsonResponse({'success': True, 'message': final_message})
+                else:
+                    # Kembalikan respons JSON gagal ke klien
+                    return JsonResponse({'success': False, 'message': final_message})
+            else:
+                if success_count > 0:
+                    # Tampilkan pesan sukses ke user
+                    messages.success(request, f'Berhasil import {success_count} produk!')
+                if error_count > 0:
+                    error_msg_plain = f'{error_count} produk gagal diimport. '
+                    if len(errors) <= 5:
+                        error_msg_plain += 'Error: ' + '; '.join(errors)
+                    else:
+                        error_msg_plain += 'Error: ' + '; '.join(errors[:5]) + f'... dan {len(errors)-5} error lainnya'
+                    # Tampilkan pesan peringatan ke user
+                    messages.warning(request, error_msg_plain)
+
+        # Tangkap error Exception - lanjutkan tanpa crash
+        except ProtectedError:
+            return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
+        except Exception as e:
+            if is_ajax:
+                # Kembalikan respons JSON gagal ke klien
+                return JsonResponse({'success': False, 'message': f'Terjadi kesalahan: {str(e)}'})
+            # Tampilkan pesan error ke user
+            messages.error(request, f'Terjadi kesalahan: {str(e)}')
+
+        return self.get(request, *args, **kwargs)
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+                    # ║               API KONVERSI SATUAN                             ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+# Wajib login - redirect ke login page jika belum login
+@login_required
+def api_konversi_satuan(request, produk_id):
+    """
+    API: Ambil daftar satuan yang tersedia untuk produk tertentu.
+    URL: /produk/api/konversi-satuan/<produk_id>/
+
+    Return JSON:
+    {
+        "success": true,
+        "satuan_dasar": {"id": 1, "nama": "Kilogram", "singkatan": "kg"},
+        "konversi": [
+            {"satuan_id": 2, "satuan_nama": "Gram", "singkatan": "gr", "faktor": 1000, "arah": "turun"},
+            {"satuan_id": 3, "satuan_nama": "Ons", "singkatan": "ons", "faktor": 10, "arah": "turun"},
+        ]
+    }
+    """
+    from apps.produk.models import KonversiSatuan
+
+    # Blok penanganan error - coba jalankan kode di bawah
+    try:
+        # Query database - ambil satu data produk
+        produk = Produk.objects.select_related('satuan').get(pk=produk_id)
+    # Tangkap error Produk.DoesNotExist - lanjutkan tanpa crash
+    except Produk.DoesNotExist:
+        # Kembalikan respons JSON gagal ke klien
+        return JsonResponse({'success': False, 'message': 'Produk tidak ditemukan'}, status=404)
+
+    konversi_list = KonversiSatuan.get_konversi_untuk_produk(produk)
+
+    return JsonResponse({
+        'success': True,
+        'satuan_dasar': {
+            'id': produk.satuan.id,
+            'nama': produk.satuan.nama,
+            'singkatan': produk.satuan.singkatan,
+    },
+'harga_jual': float(produk.harga_jual),
+            'harga_beli': float(produk.harga_beli),
+        'konversi': konversi_list,
+    })

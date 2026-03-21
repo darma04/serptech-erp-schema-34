@@ -1,0 +1,146 @@
+{% extends 'layout/layout_blank.html' %}
+{% load static %}
+
+{% block title %}Aktivasi Lisensi{% endblock %}
+
+{% block content %}
+<div class="container-xxl">
+  <div class="authentication-wrapper authentication-basic container-p-y">
+    <div class="authentication-inner py-4">
+      <div class="card" style="max-width: 550px; margin: 0 auto;">
+        <div class="card-body">
+          <!-- Logo & Header -->
+          <div class="text-center mb-4">
+            <div class="mb-3">
+              <span class="app-brand-logo demo">
+                <i class="ri-shield-keyhole-line" style="font-size: 3rem; color: #696cff;"></i>
+              </span>
+            </div>
+            <h4 class="mb-1 fw-bold">Aktivasi Lisensi Software</h4>
+            <p class="text-muted mb-0">
+              Masukkan kunci lisensi yang Anda terima saat pembelian untuk mengaktifkan software ini.
+            </p>
+          </div>
+
+          {% if messages %}
+          {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} d-flex align-items-start mb-3" role="alert">
+            <i class="ri-{% if message.tags == 'success' %}checkbox-circle{% elif message.tags == 'error' %}error-warning{% else %}information{% endif %}-line me-2 fs-5"></i>
+            <div>{{ message }}</div>
+          </div>
+          {% endfor %}
+          {% endif %}
+
+          {% if error_message == 'invalid' %}
+          <div class="alert alert-danger d-flex align-items-start mb-3" role="alert">
+            <i class="ri-error-warning-line me-2 fs-5"></i>
+            <div>
+              <strong>Lisensi Tidak Valid!</strong><br>
+              Lisensi Anda telah kedaluwarsa, diblokir, atau perangkat tidak terdaftar. Silakan hubungi admin atau masukkan kunci baru.
+            </div>
+          </div>
+          {% endif %}
+
+          <form method="POST" action="{% url 'license_activation' %}">
+            {% csrf_token %}
+
+            <!-- License Key Input -->
+            <div class="mb-3">
+              <label for="license_key" class="form-label fw-medium">
+                <i class="ri-key-2-line me-1"></i>Kunci Lisensi
+              </label>
+              <input type="text"
+                     class="form-control form-control-lg"
+                     id="license_key"
+                     name="license_key"
+                     placeholder="Contoh: SIMKOS-2026-ABCD-EF12"
+                     value="{{ config.license_key|default:'' }}"
+                     style="font-family: monospace; letter-spacing: 1px; text-transform: uppercase;"
+                     required autofocus>
+              <div class="form-text">
+                Format: <code>PRODUK-TAHUN-XXXX-XXXX</code>
+              </div>
+            </div>
+
+            <!-- Hardware ID (readonly) -->
+            <div class="mb-3">
+              <label for="hardware_id" class="form-label fw-medium">
+                <i class="ri-fingerprint-line me-1"></i>Hardware ID (Identitas Perangkat)
+              </label>
+              <input type="text"
+                     class="form-control"
+                     id="hardware_id"
+                     value="{{ hardware_id }}"
+                     readonly
+                     style="font-family: monospace; font-size: 0.8rem; background-color: #f5f5f9;">
+              <div class="form-text text-muted">
+                ID ini dikirimkan ke server lisensi untuk mengikat software ke perangkat Anda.
+              </div>
+            </div>
+
+            <!-- CLS Server URL -->
+            <div class="mb-4">
+              <label for="cls_url" class="form-label fw-medium">
+                <i class="ri-server-line me-1"></i>URL Server Lisensi
+              </label>
+              <input type="url"
+                     class="form-control"
+                     id="cls_url"
+                     name="cls_url"
+                     value="{{ config.cls_server_url|default:'https://cls.serpgroup.cloud' }}"
+                     placeholder="https://cls.serpgroup.cloud">
+              <div class="form-text text-muted">
+                Alamat Central License Server tempat lisensi Anda dikelola.
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-primary btn-lg">
+                <i class="ri-shield-check-line me-2"></i>Aktifkan Lisensi
+              </button>
+            </div>
+          </form>
+
+          <!-- Info Box -->
+          <div class="mt-4 p-3 rounded" style="background: #f5f5f9;">
+            <h6 class="fw-bold mb-2">
+              <i class="ri-information-line me-1 text-primary"></i>Informasi
+            </h6>
+            <ul class="mb-0" style="font-size: 0.85rem; padding-left: 1.2rem;">
+              <li>Kunci lisensi diberikan oleh admin setelah pembayaran.</li>
+              <li>Setiap kunci lisensi dapat digunakan pada perangkat terbatas.</li>
+              <li>Lisensi akan diverifikasi secara berkala (setiap 24 jam).</li>
+              <li>Hubungi <strong>support@serpgroup.cloud</strong> jika membutuhkan bantuan.</li>
+            </ul>
+          </div>
+
+          {% if config.is_activated %}
+          <!-- Status Box (jika sudah aktif tapi expired/invalid) -->
+          <div class="mt-3 p-3 rounded border border-warning" style="background: #fff9e6;">
+            <h6 class="fw-bold mb-1 text-warning">
+              <i class="ri-alert-line me-1"></i>Status Sebelumnya
+            </h6>
+            <table class="table table-sm table-borderless mb-0" style="font-size: 0.85rem;">
+              <tr>
+                <td class="text-muted" style="width: 40%;">Kunci Lisensi</td>
+                <td><code>{{ config.license_key }}</code></td>
+              </tr>
+              <tr>
+                <td class="text-muted">Validasi Terakhir</td>
+                <td>{{ config.last_validated|default:"-" }}</td>
+              </tr>
+              <tr>
+                <td class="text-muted">Pesan</td>
+                <td>{{ config.validation_message|default:"-" }}</td>
+              </tr>
+            </table>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

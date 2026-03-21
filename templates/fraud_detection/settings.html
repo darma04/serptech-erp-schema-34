@@ -1,0 +1,156 @@
+{% extends layout_path %}
+{% load static %}
+
+{% block title %}Pengaturan Fraud - Fraud Detection{% endblock title %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <h4 class="mb-4"><i class="ri-settings-3-line me-2"></i>Pengaturan Pencegahan Fraud</h4>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-shield-star-line me-2"></i>Konfigurasi Keamanan Sistem</h5>
+                    <small class="text-muted">Aktifkan/nonaktifkan fitur pencegahan fraud di bawah ini.</small>
+                </div>
+                <div class="card-body">
+                    <form id="formFraudSettings">
+                        {% csrf_token %}
+
+                        <!-- Toggle: Blokir Hapus Data Lunas -->
+                        <div class="d-flex justify-content-between align-items-center py-3 border-bottom">
+                            <div>
+                                <h6 class="mb-1"><i class="ri-delete-bin-5-line me-1 text-danger"></i>Blokir Hapus Data Lunas</h6>
+                                <small class="text-muted">Jika aktif, transaksi SO/PO/POS yang berstatus lunas <strong>tidak bisa dihapus</strong> oleh siapapun kecuali superuser.</small>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="block_delete_paid"
+                                    id="blockDeletePaid" {% if fraud_rule.block_delete_paid %}checked{% endif %}
+                                    {% if not can_edit.fraud_detection %}disabled{% endif %}>
+                            </div>
+                        </div>
+
+                        <!-- Toggle: Blokir Stok Minus -->
+                        <div class="d-flex justify-content-between align-items-center py-3 border-bottom">
+                            <div>
+                                <h6 class="mb-1"><i class="ri-subtract-line me-1 text-warning"></i>Blokir Stok Minus</h6>
+                                <small class="text-muted">Jika aktif, transaksi POS akan <strong>ditolak otomatis</strong> jika stok gudang tidak mencukupi.</small>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="block_negative_stock"
+                                    id="blockNegativeStock" {% if fraud_rule.block_negative_stock %}checked{% endif %}
+                                    {% if not can_edit.fraud_detection %}disabled{% endif %}>
+                            </div>
+                        </div>
+
+                        <!-- Input: Batas Maksimal Diskon -->
+                        <div class="d-flex justify-content-between align-items-center py-3 border-bottom">
+                            <div>
+                                <h6 class="mb-1"><i class="ri-percent-line me-1 text-info"></i>Batas Maksimal Diskon</h6>
+                                <small class="text-muted">Kasir tidak boleh memberi diskon melebihi persentase ini. <strong>Default: 100%</strong> (tanpa batas).</small>
+                            </div>
+                            <div class="d-flex align-items-center gap-1" style="min-width:120px;">
+                                <input type="number" name="max_discount_percent" class="form-control form-control-sm text-center"
+                                    value="{{ fraud_rule.max_discount_percent }}" min="0" max="100" step="0.5" style="width:80px;"
+                                    {% if not can_edit.fraud_detection %}disabled{% endif %}>
+                                <span class="text-muted">%</span>
+                            </div>
+                        </div>
+
+                        <!-- Input: Jam Operasional -->
+                        <div class="py-3 border-bottom">
+                            <h6 class="mb-2"><i class="ri-time-line me-1 text-primary"></i>Jam Operasional Toko</h6>
+                            <small class="text-muted mb-3 d-block">Aktivitas di luar jam ini akan otomatis <strong>ditandai sebagai anomali</strong>.</small>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <label class="form-label">Mulai</label>
+                                    <input type="time" name="jam_operasional_mulai" class="form-control"
+                                        value="{{ fraud_rule.jam_operasional_mulai|time:'H:i' }}"
+                                        {% if not can_edit.fraud_detection %}disabled{% endif %}>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Selesai</label>
+                                    <input type="time" name="jam_operasional_selesai" class="form-control"
+                                        value="{{ fraud_rule.jam_operasional_selesai|time:'H:i' }}"
+                                        {% if not can_edit.fraud_detection %}disabled{% endif %}>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit -->
+                        <div class="mt-4 text-end">
+                            {% if can_edit.fraud_detection %}
+                            <button type="submit" class="btn btn-primary btn-lg" id="btnSaveSettings">
+                                <i class="ri-save-line me-1"></i>Simpan Pengaturan
+                            </button>
+                            {% else %}
+                            <div class="alert alert-warning mb-0 d-inline-block">
+                                <i class="ri-lock-line me-1"></i>Anda tidak memiliki akses untuk mengubah pengaturan ini.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Info Card -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-start">
+                        <i class="ri-information-line ri-24px me-3 text-primary"></i>
+                        <div>
+                            <h6>Cara Kerja Pencegahan Fraud</h6>
+                            <ul class="mb-0 text-muted">
+                                <li><strong>Blokir Hapus Data Lunas:</strong> Sistem akan menampilkan error saat user mencoba menghapus transaksi yang sudah lunas.</li>
+                                <li><strong>Blokir Stok Minus:</strong> Transaksi POS ditolak jika jumlah barang yang dijual melebihi stok gudang.</li>
+                                <li><strong>Batas Diskon:</strong> Kasir akan mendapat peringatan jika memberi diskon melebihi batas yang ditentukan.</li>
+                                <li><strong>Jam Operasional:</strong> Aktivitas di luar jam operasional akan otomatis dicatat sebagai anomali di halaman Daftar Anomali.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block page_js %}
+<script>
+document.getElementById('formFraudSettings').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const btn = document.getElementById('btnSaveSettings');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+
+    fetch('{% url "fraud_detection:settings" %}', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-save-line me-1"></i>Simpan Pengaturan';
+        if (data.success) {
+            // Show success toast/alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+            alertDiv.innerHTML = '<i class="ri-check-line me-1"></i>' + data.message +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+            this.parentNode.insertBefore(alertDiv, this.nextSibling);
+            setTimeout(() => alertDiv.remove(), 3000);
+        } else {
+            alert('Gagal: ' + data.message);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ri-save-line me-1"></i>Simpan Pengaturan';
+        alert('Terjadi kesalahan: ' + err);
+    });
+});
+</script>
+{% endblock page_js %}

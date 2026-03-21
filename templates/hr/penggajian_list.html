@@ -1,0 +1,818 @@
+{% extends 'layout/layout_vertical.html' %}
+{% comment %}
+==========================================================================
+PENGGAJIAN LIST - Daftar Penggajian
+Halaman daftar slip gaji karyawan.
+Tabel: periode, karyawan, gaji pokok, tunjangan, potongan, total.
+==========================================================================
+{% endcomment %}
+{% load static %}
+
+{% block title %}Daftar Penggajian - HR{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+{% endblock vendor_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">
+                <i class="ri-money-dollar-circle-line me-2"></i>Daftar Penggajian
+            </h4>
+            <p class="text-muted mb-0">Kelola slip gaji karyawan</p>
+        </div>
+        {% if can_create.hr %}
+        <div class="d-flex gap-2">
+            <a href="{% url 'hr:penggajian-generate' %}" class="btn btn-success">
+                <i class="ri-file-add-line me-1"></i>Generate Slip Gaji
+            </a>
+            <a href="{% url 'hr:penggajian-add' %}" class="btn btn-primary">
+                <i class="ri-add-line me-1"></i>Tambah Manual
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-sm-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Total Slip Gaji</p>
+                            <h4 class="mb-0">{{ total_slip|default:0 }}</h4>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-primary rounded p-2">
+                                <i class="ri-file-list-3-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-sm-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Sudah Dibayar</p>
+                            <h4 class="mb-0 text-success">{{ total_dibayar|default:0 }}</h4>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-success rounded p-2">
+                                <i class="ri-check-double-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-sm-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Sedang Diproses</p>
+                            <h4 class="mb-0 text-warning">{{ total_diproses|default:0 }}</h4>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-warning rounded p-2">
+                                <i class="ri-time-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-sm-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div class="card-info">
+                            <p class="card-text text-muted">Total Pengeluaran</p>
+                            <h4 class="mb-0 text-info">Rp {{ grand_total|floatformat:0|default:"0" }}</h4>
+                        </div>
+                        <div class="card-icon">
+                            <span class="badge bg-label-info rounded p-2">
+                                <i class="ri-money-dollar-box-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Periode Bulan</label>
+                    <select class="form-select" id="bulanFilter">
+                        <option value="">Semua Bulan</option>
+                        <option value="Januari">Januari</option>
+                        <option value="Februari">Februari</option>
+                        <option value="Maret">Maret</option>
+                        <option value="April">April</option>
+                        <option value="Mei">Mei</option>
+                        <option value="Juni">Juni</option>
+                        <option value="Juli">Juli</option>
+                        <option value="Agustus">Agustus</option>
+                        <option value="September">September</option>
+                        <option value="Oktober">Oktober</option>
+                        <option value="November">November</option>
+                        <option value="Desember">Desember</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tahun</label>
+                    <select class="form-select" id="tahunFilter">
+                        <option value="">Semua Tahun</option>
+                        <option value="2026">2026</option>
+                        <option value="2025">2025</option>
+                        <option value="2024">2024</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="statusFilter">
+                        <option value="">Semua Status</option>
+                        <option value="draft">Draft</option>
+                        <option value="diproses">Diproses</option>
+                        <option value="dibayar">Dibayar</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="applyFilter()">
+                            <i class="ri-filter-3-line me-1"></i>Terapkan Filter
+                        </button>
+                        <button class="btn btn-label-secondary" onclick="resetFilter()">
+                            <i class="ri-refresh-line me-1"></i>Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pilih Kolom Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <label class="form-label">Pilih Kolom Yang Ditampilkan</label>
+            <div class="dropdown" id="columnFilterDropdown">
+                <button class="btn btn-label-secondary dropdown-toggle w-100 text-start" type="button"
+                    data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="ri-layout-column-line me-1"></i>Pilih Kolom <span class="caret"></span>
+                </button>
+                <div class="dropdown-menu p-3" style="min-width: 200px;">
+                    <div class="mb-2"><strong>Kolom Tabel</strong></div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input column-checkbox" type="checkbox" value="0" id="col-periode"
+                            checked onchange="toggleColumns()">
+                        <label class="form-check-label" for="col-periode">Periode</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input column-checkbox" type="checkbox" value="1" id="col-karyawan"
+                            checked onchange="toggleColumns()">
+                        <label class="form-check-label" for="col-karyawan">Karyawan</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input column-checkbox" type="checkbox" value="2" id="col-gajipokok"
+                            checked onchange="toggleColumns()">
+                        <label class="form-check-label" for="col-gajipokok">Gaji Pokok</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input column-checkbox" type="checkbox" value="3" id="col-tunjangan"
+                            checked onchange="toggleColumns()">
+                        <label class="form-check-label" for="col-tunjangan">Tunjangan</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input column-checkbox" type="checkbox" value="4" id="col-potongan"
+                            checked onchange="toggleColumns()">
+                        <label class="form-check-label" for="col-potongan">Potongan</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input column-checkbox" type="checkbox" value="5" id="col-gajibersih"
+                            checked onchange="toggleColumns()">
+                        <label class="form-check-label" for="col-gajibersih">Gaji Bersih</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input column-checkbox" type="checkbox" value="6" id="col-status"
+                            checked onchange="toggleColumns()">
+                        <label class="form-check-label" for="col-status">Status</label>
+                    </div>
+                    <hr class="my-2">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-primary flex-grow-1" onclick="selectAllColumns()">
+                            <i class="ri-checkbox-multiple-line me-1"></i>Semua
+                        </button>
+                        <button type="button" class="btn btn-sm btn-label-secondary flex-grow-1"
+                            onclick="deselectAllColumns()">
+                            <i class="ri-checkbox-blank-line me-1"></i>Kosongkan
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <small class="text-muted">Klik untuk memilih kolom</small>
+        </div>
+    </div>
+
+    <!-- Main Card -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Data Slip Gaji</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-label-success" onclick="exportToExcel()">
+                    <i class="ri-file-excel-2-line me-1"></i>Export Excel
+                </button>
+                <button class="btn btn-sm btn-label-danger" onclick="exportToPDF()">
+                    <i class="ri-file-pdf-line me-1"></i>Export PDF
+                </button>
+            </div>
+        </div>
+        <div class="card-datatable table-responsive">
+            <table class="datatables-penggajian table table-hover" id="penggajianTable">
+                <thead>
+                    <tr>
+                        <th>Periode</th>
+                        <th>Karyawan</th>
+                        <th>Gaji Pokok</th>
+                        <th>Tunjangan</th>
+                        <th>Potongan</th>
+                        <th>Gaji Bersih</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for slip in penggajian_list %}
+                    <tr>
+                        <td>
+                            <strong>{{ slip.periode }}</strong>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar avatar-sm me-2 flex-shrink-0 bg-label-primary">
+                                    <span class="avatar-initial rounded-circle">{{ slip.karyawan.nama|slice:":2"|upper }}</span>
+                                </div>
+                                <div>
+                                    <strong>{{ slip.karyawan.nama }}</strong>
+                                    <br><small class="text-muted">{{ slip.karyawan.jabatan.nama|default:"-" }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>Rp {{ slip.gaji_pokok|floatformat:0 }}</td>
+                        <td>Rp {{ slip.total_tunjangan|floatformat:0 }}</td>
+                        <td class="text-danger">- Rp {{ slip.total_potongan|floatformat:0 }}</td>
+                        <td><strong class="text-success">Rp {{ slip.gaji_bersih|floatformat:0 }}</strong></td>
+                        <td>
+                            {% if slip.status == 'dibayar' %}
+                            <span class="badge bg-label-success">Dibayar</span>
+                            {% elif slip.status == 'diproses' %}
+                            <span class="badge bg-label-warning">Diproses</span>
+                            {% else %}
+                            <span class="badge bg-label-secondary">Draft</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if can_edit.hr or can_delete.hr %}
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow"
+                                    data-bs-toggle="dropdown">
+                                    <i class="ri-more-2-line"></i>
+                                </button>
+                                <div class="dropdown-menu">
+                                    {% if can_view.hr %}
+                                    <a class="dropdown-item" href="{% url 'hr:penggajian-detail' slip.pk %}">
+                                        <i class="ri-eye-line me-2"></i>Lihat Detail
+                                    </a>
+                                    {% endif %}
+                                    {% if can_edit.hr %}
+                                    <a class="dropdown-item" href="{% url 'hr:penggajian-edit' slip.pk %}">
+                                        <i class="ri-edit-line me-2"></i>Edit
+                                    </a>
+                                    {% endif %}
+                                    {% if can_edit.hr and can_delete.hr %}
+                                    <div class="dropdown-divider"></div>
+                                    {% endif %}
+                                    {% if can_delete.hr %}
+                                    <a class="dropdown-item text-danger" href="javascript:void(0);"
+                                        onclick="confirmDelete({{ slip.pk }}, '{{ slip.karyawan.nama }} - {{ slip.periode }}')">
+                                        <i class="ri-delete-bin-line me-2"></i>Hapus
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="badge bg-label-secondary">
+                                <i class="ri-eye-line me-1"></i>View Only
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <i class="ri-money-dollar-circle-line ri-3x text-muted mb-3 d-block"></i>
+                            <p class="text-muted mb-0">Belum ada data slip gaji</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-footer-summary">
+                    <tr>
+                        <td colspan="2" class="text-start ps-4 py-3">
+                            <div class="d-flex align-items-center">
+                                <i class="ri-calculator-line me-2 text-primary" style="font-size: 1.5rem;"></i>
+                                <div>
+                                    <strong>RINGKASAN</strong>
+                                    <br><small class="text-muted">{{ total_slip|default:0 }} Slip Gaji</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3 text-center">
+                            <strong class="text-primary">Rp {{ total_gaji_pokok|floatformat:0|default:"0" }}</strong>
+                            <br><small class="text-muted">Total Gaji Pokok</small>
+                        </td>
+                        <td class="py-3 text-center">
+                            <strong class="text-info">Rp {{ total_tunjangan|floatformat:0|default:"0" }}</strong>
+                            <br><small class="text-muted">Total Tunjangan</small>
+                        </td>
+                        <td class="py-3 text-center">
+                            <strong class="text-danger">Rp {{ total_potongan|floatformat:0|default:"0" }}</strong>
+                            <br><small class="text-muted">Total Potongan</small>
+                        </td>
+                        <td class="py-3 text-center">
+                            <strong class="text-success">Rp {{ grand_total|floatformat:0|default:"0" }}</strong>
+                            <br><small class="text-muted">Total Gaji Bersih</small>
+                        </td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger align-items-center py-3">
+                    <h5 class="modal-title text-white mb-0"><i class="ri-delete-bin-line me-2"></i>Konfirmasi Hapus</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <i class="ri-error-warning-line text-danger" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">Hapus Slip Gaji?</h4>
+                    <p class="text-muted">Data: <strong id="deleteName"></strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Ya, Hapus</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% csrf_token %}
+{% endblock content %}
+
+{% block page_js %}
+<style>
+    .dataTables_wrapper .dataTables_info {
+        padding: 1rem 1.5rem;
+        font-size: 0.875rem;
+        color: #697a8d;
+    }
+
+    .dataTables_wrapper .dataTables_paginate {
+        padding: 1rem 1.5rem;
+    }
+
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter {
+        padding: 0 1.5rem 1rem 1.5rem;
+    }
+
+    .dataTables_wrapper .dataTables_filter input {
+        border: 1px solid #d9dee3;
+        border-radius: 0.375rem;
+        padding: 0.4375rem 0.875rem;
+    }
+
+    .dataTables_wrapper .dataTables_length select {
+        border: 1px solid #d9dee3;
+        border-radius: 0.375rem;
+        padding: 0.4375rem 2rem 0.4375rem 0.875rem;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        padding: 0.438rem 0.875rem;
+        border-radius: 0.375rem;
+        margin: 0 0.125rem;
+        border: none;
+        background: transparent;
+        color: #697a8d;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+        background: #696cff !important;
+        color: white !important;
+        border: none;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.disabled) {
+        background: rgba(105, 108, 255, 0.08) !important;
+        border: none;
+        color: #696cff !important;
+    }
+
+    .card-datatable {
+        padding-bottom: 0;
+    }
+
+    .avatar-initial {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .avatar-md {
+        width: 40px !important;
+        height: 40px !important;
+    }
+
+    .avatar-md .avatar-initial {
+        width: 40px !important;
+        height: 40px !important;
+    }
+
+    .avatar-md .avatar-initial i {
+        font-size: 1.25rem !important;
+    }
+
+    @media (max-width: 768px) {
+        .card-datatable {
+            overflow-x: hidden !important;
+        }
+
+        .datatables-penggajian {
+            min-width: 1000px !important;
+        }
+    }
+</style>
+
+<script>
+    let dataTable;
+
+    $(document).ready(function () {
+        {% if penggajian_list %}
+        dataTable = $('#penggajianTable').DataTable({
+            language: {
+                "sEmptyTable": "Tidak ada data", "sLengthMenu": "Tampilkan _MENU_ data", "sSearch": "Cari:",
+                "sInfo": "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
+                "oPaginate": { "sFirst": "Pertama", "sPrevious": "Sebelumnya", "sNext": "Selanjutnya", "sLast": "Terakhir" }
+            },
+            order: [[0, 'desc']],
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, -1], ['10', '25', '50', 'Semua']],
+            responsive: false,
+            columnDefs: [{ orderable: false, targets: [7] }],
+            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>><"table-responsive"rt><"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
+        });
+        {% endif %}
+    });
+
+    function applyFilter() {
+        if (!dataTable) return;
+        const bulan = $('#bulanFilter').val();
+        const tahun = $('#tahunFilter').val();
+        const status = $('#statusFilter').val();
+
+        let periodeSearch = '';
+        if (bulan) periodeSearch += bulan;
+        if (tahun) periodeSearch += ' ' + tahun;
+
+        dataTable.column(0).search(periodeSearch.trim());
+        dataTable.column(6).search(status);
+        dataTable.draw();
+    }
+
+    function toggleColumns() {
+        if (!dataTable) return;
+        document.querySelectorAll('.column-checkbox').forEach(cb => {
+            dataTable.column(parseInt(cb.value)).visible(cb.checked);
+        });
+    }
+
+    function selectAllColumns() {
+        document.querySelectorAll('.column-checkbox').forEach(cb => cb.checked = true);
+        toggleColumns();
+    }
+
+    function deselectAllColumns() {
+        document.querySelectorAll('.column-checkbox').forEach(cb => cb.checked = false);
+        toggleColumns();
+    }
+
+    function resetFilter() {
+        $('#bulanFilter').val('');
+        $('#tahunFilter').val('');
+        $('#statusFilter').val('');
+        if (dataTable) {
+            dataTable.columns().search('').draw();
+        }
+    }
+
+    // Company Information (from Template Cetak settings)
+    const EXCEL_INFO = {
+        name: "{{ export_excel_template.header_nama_perusahaan|escapejs|default:'Nama Perusahaan' }}",
+        address: "{{ export_excel_template.header_alamat|escapejs|default:'Alamat Bisnis' }}",
+        phone: "{{ export_excel_template.header_telepon|escapejs|default:'No Telp' }}",
+        email: "Email: {{ export_excel_template.header_email|escapejs|default:'email@domain.com' }}",
+        website: "{{ export_excel_template.header_website|escapejs|default:'' }}",
+        copyright: "{{ export_excel_template.footer_copyright|escapejs|default:'Hak Cipta Dilindungi' }}"
+    };
+
+    const PDF_INFO = {
+        name: "{{ export_pdf_template.header_nama_perusahaan|escapejs|default:'Nama Perusahaan' }}",
+        address: "{{ export_pdf_template.header_alamat|escapejs|default:'Alamat Bisnis' }}",
+        phone: "{{ export_pdf_template.header_telepon|escapejs|default:'No Telp' }}",
+        email: "Email: {{ export_pdf_template.header_email|escapejs|default:'email@domain.com' }}",
+        website: "{{ export_pdf_template.header_website|escapejs|default:'' }}",
+        copyright: "{{ export_pdf_template.footer_copyright|escapejs|default:'Hak Cipta Dilindungi' }}"
+    };
+
+
+    // === FOOTER DATA: Explicit summary values per column index ===
+    const FOOTER_DATA = { 2: "Rp {{ total_gaji_pokok|floatformat:0|default:'0' }}", 3: "Rp {{ total_tunjangan|floatformat:0|default:'0' }}", 4: "Rp {{ total_potongan|floatformat:0|default:'0' }}", 5: "Rp {{ grand_total|floatformat:0|default:'0' }}" };
+    const FOOTER_LABEL = 'RINGKASAN';
+
+    function exportToExcel() {
+        const table = document.getElementById('penggajianTable');
+        if (!table) { alert('Tabel tidak ditemukan!'); return; }
+
+        const tableObj = new $.fn.dataTable.Api('#penggajianTable');
+
+        let colCount = 0;
+        let visibleColumns = [];
+
+        tableObj.columns().every(function (index) {
+            const headerNode = this.header();
+            const headerText = headerNode ? headerNode.textContent.trim() : '';
+            if (this.visible() && headerText.toLowerCase() !== 'aksi' && headerText.toLowerCase() !== 'gambar') {
+                visibleColumns.push({ index: index, text: headerText });
+                colCount++;
+            }
+        });
+
+        let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+        html += '<head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>';
+        html += '<body>';
+
+        // --- ADD EXCEL HEADER (Company Info) ---
+        html += '<table border="0">';
+        if (typeof EXCEL_INFO !== 'undefined') {
+            html += `<tr><td colspan="${colCount}" style="text-align:center; font-size:16px; font-weight:bold; color:#5F61E6;">${EXCEL_INFO.name}</td></tr>`;
+            html += `<tr><td colspan="${colCount}" style="text-align:center; font-size:12px;">${EXCEL_INFO.address}</td></tr>`;
+            html += `<tr><td colspan="${colCount}" style="text-align:center; font-size:12px;">${EXCEL_INFO.phone} | ${EXCEL_INFO.email}</td></tr>`;
+            html += `<tr><td colspan="${colCount}"></td></tr>`;
+        }
+        html += '</table>';
+
+        html += '<table border="1">';
+        html += '<thead><tr style="background-color: #696CFF; color: #FFFFFF; font-weight: bold;">';
+
+        visibleColumns.forEach(col => {
+            html += `<th>${col.text}</th>`;
+        });
+
+        html += '</tr></thead><tbody>';
+
+        tableObj.rows({ page: 'current' }).every(function (rowIdx, tableLoop, rowLoop) {
+            html += '<tr>';
+            visibleColumns.forEach(col => {
+                let cellNode = tableObj.cell(rowIdx, col.index).node();
+                let text = cellNode ? cellNode.textContent.trim().replace(/\s+/g, ' ') : '';
+                html += `<td>${text}</td>`;
+            });
+            html += '</tr>';
+        });
+
+        // Build summary row from explicit FOOTER_DATA
+        if (typeof FOOTER_DATA !== 'undefined' && Object.keys(FOOTER_DATA).length > 0) {
+            html += '<tr style="background-color: #f8f9fa; font-weight: bold;">';
+            let ri = 0;
+            while (ri < visibleColumns.length) {
+                let colIdx = visibleColumns[ri].index;
+                if (FOOTER_DATA[colIdx] !== undefined) {
+                    html += `<td>${FOOTER_DATA[colIdx]}</td>`;
+                    ri++;
+                } else {
+                    let spanCount = 0;
+                    let si = ri;
+                    while (si < visibleColumns.length && FOOTER_DATA[visibleColumns[si].index] === undefined) { spanCount++; si++; }
+                    html += ri === 0 ? `<td colspan="${spanCount}">${FOOTER_LABEL}</td>` : `<td colspan="${spanCount}"></td>`;
+                    ri += spanCount;
+                }
+            }
+            html += '</tr>';
+        }
+        html += '</tbody></table>';
+
+        html += '<table border="0">';
+        html += `<tr><td colspan="${colCount}"></td></tr>`;
+        if (typeof EXCEL_INFO !== 'undefined') {
+            html += `<tr><td colspan="${colCount}" style="text-align:right; font-size:10px; color:#697A8D;">Dicetak pada: ${new Date().toLocaleString('id-ID')}</td></tr>`;
+            html += `<tr><td colspan="${colCount}" style="text-align:right; font-size:10px; color:#697A8D;">${EXCEL_INFO.copyright}</td></tr>`;
+        }
+        html += '</table></body></html>';
+
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        const link = document.createElement('a');
+        link.setAttribute('href', URL.createObjectURL(blob));
+        link.setAttribute('download', 'Penggajian_' + new Date().toISOString().slice(0, 10) + '.xls');
+        link.click();
+    }
+
+    function exportToPDF() {
+        if (typeof pdfMake === 'undefined') { alert('pdfMake library tidak tersedia!'); return; }
+
+        const table = document.getElementById('penggajianTable');
+        if (!table) { alert('Tabel tidak ditemukan!'); return; }
+
+        const tableObj = new $.fn.dataTable.Api('#penggajianTable');
+
+        const headers = [];
+        let visibleColumns = [];
+
+        tableObj.columns().every(function (index) {
+            const headerNode = this.header();
+            const headerText = headerNode ? headerNode.textContent.trim() : '';
+            if (this.visible() && headerText.toLowerCase() !== 'aksi' && headerText.toLowerCase() !== 'gambar') {
+                headers.push({
+                    text: headerText,
+                    style: 'tableHeader',
+                    fillColor: '#696CFF',
+                    color: '#FFFFFF',
+                    bold: true
+                });
+                visibleColumns.push({ index: index });
+            }
+        });
+
+        const body = [headers];
+
+        tableObj.rows({ page: 'current' }).every(function (rowIdx, tableLoop, rowLoop) {
+            const row = [];
+            visibleColumns.forEach(col => {
+                let cellNode = tableObj.cell(rowIdx, col.index).node();
+                let text = cellNode ? cellNode.textContent.trim().replace(/\s+/g, ' ') : '';
+                row.push(text);
+            });
+            if (row.length > 0) body.push(row);
+        });
+
+        // Build summary row from explicit FOOTER_DATA
+        if (typeof FOOTER_DATA !== 'undefined' && Object.keys(FOOTER_DATA).length > 0) {
+            const summaryRow = [];
+            let ri = 0;
+            while (ri < visibleColumns.length) {
+                let colIdx = visibleColumns[ri].index;
+                if (FOOTER_DATA[colIdx] !== undefined) {
+                    summaryRow.push({ text: String(FOOTER_DATA[colIdx]), bold: true, fillColor: '#f8f9fa' });
+                    ri++;
+                } else {
+                    let spanCount = 0;
+                    let si = ri;
+                    while (si < visibleColumns.length && FOOTER_DATA[visibleColumns[si].index] === undefined) { spanCount++; si++; }
+                    summaryRow.push({ text: (ri === 0) ? FOOTER_LABEL : '', colSpan: spanCount, bold: true, fillColor: '#f8f9fa' });
+                    for (let k = 1; k < spanCount; k++) { summaryRow.push({}); }
+                    ri += spanCount;
+                }
+            }
+            if (summaryRow.length > 0) body.push(summaryRow);
+        }
+
+        let companyInfoExists = typeof PDF_INFO !== 'undefined';
+
+        const docDefinition = {
+            pageOrientation: 'landscape',
+            pageMargins: [40, 100, 40, 60],
+            header: function (currentPage) {
+                if (companyInfoExists) {
+                    return {
+                        margin: [40, 20, 40, 10],
+                        columns: [
+                            {
+                                width: '*',
+                                stack: [
+                                    { text: PDF_INFO.name, style: 'companyName' },
+                                    { text: PDF_INFO.address, style: 'companyInfo' },
+                                    { text: PDF_INFO.phone + ' | ' + PDF_INFO.email, style: 'companyInfo' }
+                                ]
+                            },
+                            { width: 'auto', stack: [{ text: 'Halaman ' + currentPage, style: 'pageNumber', alignment: 'right' }] }
+                        ]
+                    };
+                }
+                return { text: 'Halaman ' + currentPage, margin: [40, 20, 40, 10], alignment: 'right', style: 'pageNumber' };
+            },
+            content: [
+                { text: 'DAFTAR PENGGAJIAN', style: 'documentTitle', margin: [0, 0, 0, 5] },
+                { text: 'Tanggal: ' + new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }), style: 'dateText', margin: [0, 0, 0, 20] },
+                {
+                    table: { headerRows: 1, widths: Array(headers.length).fill('auto'), body: body },
+                    layout: {
+                        fillColor: (rowIndex) => (rowIndex === 0) ? '#696CFF' : ((rowIndex % 2 === 0) ? '#F5F5F9' : null),
+                        hLineWidth: () => 0.5,
+                        vLineWidth: () => 0.5,
+                        hLineColor: () => '#DBDADE',
+                        vLineColor: () => '#DBDADE'
+                    }
+                }
+            ],
+            footer: function (currentPage, pageCount) {
+                if (companyInfoExists) {
+                    return {
+                        margin: [40, 10, 40, 10],
+                        columns: [
+                            { text: 'Dicetak pada: ' + new Date().toLocaleString('id-ID'), style: 'footerText' },
+                            { text: PDF_INFO.copyright, style: 'footerText', alignment: 'right' }
+                        ]
+                    };
+                }
+                return { text: 'Dicetak pada: ' + new Date().toLocaleString('id-ID'), margin: [40, 10, 40, 10], style: 'footerText' };
+            },
+            styles: {
+                companyName: { fontSize: 14, bold: true, color: '#5F61E6' },
+                companyInfo: { fontSize: 9, color: '#697A8D' },
+                pageNumber: { fontSize: 9, color: '#697A8D' },
+                documentTitle: { fontSize: 18, bold: true, color: '#5F61E6' },
+                dateText: { fontSize: 10, color: '#697A8D' },
+                tableHeader: { bold: true, fontSize: 10, color: '#FFFFFF' },
+                footerText: { fontSize: 8, color: '#697A8D' }
+            },
+            defaultStyle: { fontSize: 9 }
+        };
+
+        pdfMake.createPdf(docDefinition).download('Penggajian_' + new Date().toISOString().slice(0, 10) + '.pdf');
+    }
+
+    let deleteId = null;
+function confirmDelete(id, name) {
+    deleteId = id;
+    $('#deleteName').text(name);
+    $('#deleteModal .delete-error-msg').remove();
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+$('#confirmDeleteBtn').on('click', function() {
+    if (!deleteId) return;
+    var btn = $(this);
+    var originalText = btn.html();
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Menghapus...');
+    $('#deleteModal .delete-error-msg').remove();
+    var csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    $.ajax({
+        url: `/hr/penggajian/${deleteId}/delete/`,
+        type: 'POST',
+        headers: {'X-CSRFToken': csrftoken},
+        success: function(response) {
+            if (response.success) {
+                $('#deleteModal').modal('hide');
+                location.reload();
+            } else {
+                $('#deleteModal .modal-body').append('<div class="delete-error-msg alert alert-danger d-flex align-items-start mt-3 mb-0" role="alert"><i class="ri-error-warning-line me-2 fs-5"></i><div>' + (response.message || 'Gagal menghapus data.') + '</div></div>');
+                btn.prop('disabled', false).html(originalText);
+            }
+        },
+        error: function(xhr) {
+            var msg = 'Terjadi kesalahan pada server. Silakan coba lagi.';
+            try { var r = JSON.parse(xhr.responseText); msg = r.message || msg; } catch(e) {}
+            $('#deleteModal .modal-body').append('<div class="delete-error-msg alert alert-danger d-flex align-items-start mt-3 mb-0" role="alert"><i class="ri-error-warning-line me-2 fs-5"></i><div>' + msg + '</div></div>');
+            btn.prop('disabled', false).html(originalText);
+        }
+    });
+});
+</script>
+{% endblock page_js %}

@@ -1,0 +1,325 @@
+{% extends 'layout/layout_vertical.html' %}
+{% comment %}
+==========================================================================
+   METODE PEMBAYARAN FORM - Form Tambah/Edit Metode Pembayaran
+   Formulir untuk membuat atau mengedit metode pembayaran.
+   Field: nama, kode, keterangan.
+   ==========================================================================
+{% endcomment %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{{ action }} Metode Pembayaran - Pengaturan{% endblock title %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <!-- Header -->
+    <div class="mb-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb breadcrumb-style1">
+                <li class="breadcrumb-item">
+                    <a href="{% url 'pengaturan:metode_pembayaran_list' %}">Metode Pembayaran</a>
+                </li>
+                <li class="breadcrumb-item active">{{ action }}</li>
+            </ol>
+        </nav>
+        <h4 class="mb-1">{{ action }} Metode Pembayaran</h4>
+        <p class="text-muted mb-0">Isi form di bawah untuk {{ action|lower }} metode pembayaran</p>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-8 col-lg-10">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Informasi Metode Pembayaran</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="metodePembayaranForm">
+                        {% csrf_token %}
+
+                        <div class="row g-3">
+                            <!-- Gambar Upload -->
+                            <div class="col-12">
+                                <label class="form-label">Gambar/Logo Metode Pembayaran</label>
+                                <div class="d-flex align-items-start gap-4 mb-3">
+                                    {% if object.gambar %}
+                                    <img src="{{ object.gambar.url }}" alt="{{ object.nama }}"
+                                        class="d-block rounded" id="uploadedImage"
+                                        style="width: 100px; height: 100px; object-fit: cover; border: 1px solid #e1e1e1;" />
+                                    {% else %}
+                                    <div class="d-flex justify-content-center align-items-center rounded bg-label-secondary"
+                                        id="uploadedImage"
+                                        style="width: 100px; height: 100px; border: 1px dashed #ccc;">
+                                        <i class="ri-image-add-line ri-2x text-muted"></i>
+                                    </div>
+                                    {% endif %}
+                                    <div class="button-wrapper">
+                                        <label for="id_gambar" class="btn btn-primary me-2 mb-2" tabindex="0">
+                                            <span class="d-none d-sm-block"><i class="ri-upload-2-line me-1"></i>Upload Gambar</span>
+                                            <i class="ri-upload-2-line d-block d-sm-none"></i>
+                                            <input type="file" id="id_gambar" name="gambar" class="account-file-input" hidden
+                                                accept="image/png, image/jpeg, image/gif, image/webp" />
+                                        </label>
+                                        {% if object.gambar %}
+                                        <button type="button" class="btn btn-outline-secondary mb-2" id="resetImage">
+                                            <i class="ri-refresh-line d-block d-sm-none"></i>
+                                            <span class="d-none d-sm-block">Reset</span>
+                                        </button>
+                                        {% endif %}
+                                        <p class="text-muted mb-0 small">Format: JPG, PNG, GIF, WEBP. Max 2MB</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Nama Metode -->
+                            <div class="col-md-12">
+                                <label class="form-label" for="id_nama">
+                                    Nama Metode <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group input-group-merge">
+                                    <span class="input-group-text"><i class="ri-wallet-3-line"></i></span>
+                                    <input type="text"
+                                        class="form-control {% if form.nama.errors %}is-invalid{% endif %}" id="id_nama"
+                                        name="nama" value="{{ form.nama.value|default:'' }}"
+                                        placeholder="Contoh: Tunai, Transfer Bank, QRIS" required>
+                                </div>
+                                {% if form.nama.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.nama.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="text-muted">Nama metode pembayaran yang akan ditampilkan</small>
+                            </div>
+
+                            <!-- Nama Pemilik -->
+                            <div class="col-md-6">
+                                <label class="form-label" for="id_nama_pemilik">
+                                    Nama Pemilik
+                                </label>
+                                <div class="input-group input-group-merge">
+                                    <span class="input-group-text"><i class="ri-user-3-line"></i></span>
+                                    <input type="text"
+                                        class="form-control {% if form.nama_pemilik.errors %}is-invalid{% endif %}" id="id_nama_pemilik"
+                                        name="nama_pemilik" value="{{ form.nama_pemilik.value|default:'' }}"
+                                        placeholder="Contoh: PT ABC, John Doe">
+                                </div>
+                                {% if form.nama_pemilik.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.nama_pemilik.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="text-muted">Nama pemilik rekening atau akun pembayaran (opsional)</small>
+                            </div>
+
+                            <!-- Kode -->
+                            <div class="col-md-6">
+                                <label class="form-label" for="id_kode">
+                                    Kode <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group input-group-merge">
+                                    <span class="input-group-text"><i class="ri-barcode-line"></i></span>
+                                    <input type="text"
+                                        class="form-control {% if form.kode.errors %}is-invalid{% endif %}" id="id_kode"
+                                        name="kode" value="{{ form.kode.value|default:'' }}"
+                                        placeholder="Contoh: CASH, BANK, QRIS" style="text-transform: uppercase;"
+                                        required>
+                                </div>
+                                {% if form.kode.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.kode.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="text-muted">Kode unik untuk identifikasi (huruf kapital)</small>
+                            </div>
+
+                            <!-- Status Aktif -->
+                            <div class="col-md-6">
+                                <label class="form-label d-block">Status</label>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="id_aktif" name="aktif" {% if form.aktif.value or form.aktif.value is None %}checked{% endif %}>
+                                    <label class="form-check-label" for="id_aktif">
+                                        <span class="badge bg-label-success" id="statusBadge">Aktif</span>
+                                    </label>
+                                </div>
+                                <small class="text-muted">Metode pembayaran yang aktif akan muncul di POS</small>
+                            </div>
+
+                            <!-- Deskripsi -->
+                            <div class="col-12">
+                                <label class="form-label" for="id_deskripsi">Deskripsi</label>
+                                <textarea class="form-control" id="id_deskripsi" name="deskripsi" rows="3"
+                                    placeholder="Deskripsi atau keterangan tambahan untuk metode pembayaran ini (opsional)">{{ form.deskripsi.value|default:'' }}</textarea>
+                                <small class="text-muted">Tambahkan deskripsi jika diperlukan</small>
+                            </div>
+
+                            <!-- Saldo -->
+                            <div class="col-md-6">
+                                <label class="form-label" for="id_saldo">
+                                    Saldo Awal
+                                </label>
+                                <div class="input-group input-group-merge">
+                                    <span class="input-group-text">Rp</span>
+                                    <input type="number"
+                                        class="form-control {% if form.saldo.errors %}is-invalid{% endif %}" id="id_saldo"
+                                        name="saldo" value="{{ form.saldo.value|default:'0' }}"
+                                        placeholder="0" min="0" step="0.01">
+                                </div>
+                                {% if form.saldo.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.saldo.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="text-muted">Saldo awal untuk metode pembayaran ini (opsional)</small>
+                            </div>
+
+                            <!-- Info Box -->
+                            <div class="col-12">
+                                <div class="alert alert-primary d-flex align-items-center" role="alert">
+                                    <span class="alert-icon rounded">
+                                        <i class="ri-information-line ri-22px"></i>
+                                    </span>
+                                    <div class="ms-3">
+                                        <strong>Tips:</strong> Gunakan nama yang jelas dan mudah dipahami oleh kasir.
+                                        Kode harus unik dan tidak boleh sama dengan metode pembayaran lain.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="pt-4 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="ri-save-line me-1"></i> Simpan
+                            </button>
+                            <a href="{% url 'pengaturan:metode_pembayaran_list' %}" class="btn btn-label-secondary">
+                                <i class="ri-close-line me-1"></i> Batal
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Card -->
+        <div class="col-xl-4 col-lg-12 mt-4 mt-xl-0">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="text-white mb-3">
+                        <i class="ri-lightbulb-line me-2"></i>Panduan
+                    </h5>
+                    <ul class="ps-3 mb-0">
+                        <li class="mb-2">Nama metode harus jelas dan mudah dipahami</li>
+                        <li class="mb-2">Kode harus unik (contoh: CASH, BANK, QRIS)</li>
+                        <li class="mb-2">Upload gambar untuk tampilan lebih profesional</li>
+                        <li class="mb-2">Nonaktifkan metode yang tidak digunakan</li>
+                        <li class="mb-2">Metode aktif akan muncul di halaman POS</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Common Payment Methods -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="mb-3">Contoh Metode Pembayaran Umum</h6>
+                    <div class="d-flex flex-column gap-2">
+                        <div class="d-flex justify-content-between">
+                            <span>Tunai</span>
+                            <code>CASH</code>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Transfer Bank</span>
+                            <code>BANK</code>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>QRIS</span>
+                            <code>QRIS</code>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Kartu Debit</span>
+                            <code>DEBIT</code>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Kartu Kredit</span>
+                            <code>CREDIT</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block page_js %}
+<script>
+    $(document).ready(function () {
+        // Auto uppercase for kode field
+        $('#id_kode').on('input', function () {
+            this.value = this.value.toUpperCase().replace(/[^A-Z0-9_]/g, '');
+        });
+
+        // Update badge status saat switch berubah
+        $('#id_aktif').on('change', function () {
+            const badge = $('#statusBadge');
+            if (this.checked) {
+                badge.removeClass('bg-label-secondary').addClass('bg-label-success').text('Aktif');
+            } else {
+                badge.removeClass('bg-label-success').addClass('bg-label-secondary').text('Nonaktif');
+            }
+        });
+
+        // Inisialisasi badge status saat halaman dimuat
+        if (!$('#id_aktif').is(':checked')) {
+            $('#statusBadge').removeClass('bg-label-success').addClass('bg-label-secondary').text('Nonaktif');
+        }
+
+        // Preview uploaded image
+        $('#id_gambar').on('change', function () {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const container = $('#uploadedImage');
+                    if (container.is('img')) {
+                        container.attr('src', e.target.result);
+                    } else {
+                        container.replaceWith(`<img src="${e.target.result}" alt="Preview" class="d-block rounded" id="uploadedImage" style="width: 100px; height: 100px; object-fit: cover; border: 1px solid #e1e1e1;">`);
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Reset image
+        $('#resetImage').on('click', function () {
+            $('#id_gambar').val('');
+            const container = $('#uploadedImage');
+            container.replaceWith(`
+                <div class="d-flex justify-content-center align-items-center rounded bg-label-secondary"
+                    id="uploadedImage"
+                    style="width: 100px; height: 100px; border: 1px dashed #ccc;">
+                    <i class="ri-image-add-line ri-2x text-muted"></i>
+                </div>
+            `);
+        });
+
+        // Form validation
+        $('#metodePembayaranForm').on('submit', function (e) {
+            const nama = $('#id_nama').val().trim();
+            const kode = $('#id_kode').val().trim();
+
+            if (!nama || !kode) {
+                e.preventDefault();
+                alert('Nama dan Kode harus diisi!');
+                return false;
+            }
+
+            if (kode.length < 2) {
+                e.preventDefault();
+                alert('Kode minimal 2 karakter!');
+                return false;
+            }
+        });
+    });
+</script>
+{% endblock page_js %}

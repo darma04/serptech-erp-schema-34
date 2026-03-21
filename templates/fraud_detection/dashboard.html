@@ -1,0 +1,551 @@
+{% extends layout_path %}
+{% comment %}
+==========================================================================
+   FRAUD DETECTION DASHBOARD - Grafik gelombang (ApexCharts Area) + Doughnut
+==========================================================================
+{% endcomment %}
+{% load static %}
+{% load currency_filters %}
+
+{% block title %}Dashboard Fraud Detection{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<style>
+  .fraud-stat-card .avatar-initial {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+</style>
+{% endblock page_css %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <h4 class="py-3 mb-4">
+        <span class="text-muted fw-light"><i class="ri-shield-keyhole-line me-1"></i>Fraud Detection /</span> Dashboard
+    </h4>
+
+    <!-- Row 1: Summary Cards -->
+    <div class="row g-6 mb-6">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 fraud-stat-card">
+                        <div class="avatar flex-shrink-0">
+                            <span class="avatar-initial rounded bg-label-primary">
+                                <i class="ri-alarm-warning-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted small">Total Alert</span>
+                            <h5 class="mb-0 fw-bold">{{ total_alerts }}</h5>
+                            <small class="text-muted">Semua anomali</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 fraud-stat-card">
+                        <div class="avatar flex-shrink-0">
+                            <span class="avatar-initial rounded bg-label-warning">
+                                <i class="ri-time-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted small">Menunggu Review</span>
+                            <h5 class="mb-0 fw-bold">{{ pending_alerts }}</h5>
+                            <small class="text-muted">Belum dikonfirmasi</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 fraud-stat-card">
+                        <div class="avatar flex-shrink-0">
+                            <span class="avatar-initial rounded bg-label-danger">
+                                <i class="ri-error-warning-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted small">High / Kritis</span>
+                            <h5 class="mb-0 fw-bold">{{ high_critical_alerts }}</h5>
+                            <small class="text-muted">Perlu perhatian segera</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 fraud-stat-card">
+                        <div class="avatar flex-shrink-0">
+                            <span class="avatar-initial rounded bg-label-success">
+                                <i class="ri-money-dollar-circle-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted small">Potensi Kerugian</span>
+                            <h5 class="mb-0 fw-bold text-danger">Rp {{ total_potensi_kerugian|floatformat:0 }}</h5>
+                            <small class="text-muted">Belum diverifikasi</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Total Aset Asli -->
+    <div class="row mb-6">
+        <div class="col-12">
+            <div class="card" style="background: linear-gradient(135deg, #696cff 0%, #8592ff 100%);">
+                <div class="card-body d-flex align-items-center justify-content-between py-4">
+                    <div>
+                        <h6 class="text-white mb-1 fw-semibold">Total Aset Asli Keseluruhan</h6>
+                        <h3 class="text-white mb-1 fw-bold">Rp {{ total_aset_asli|floatformat:0 }}</h3>
+                        <small class="text-white-50">Σ (stok + terjual + adjustment) × harga beli — termasuk data belum dikonfirmasi</small>
+                    </div>
+                    <div class="d-none d-sm-block">
+                        <i class="ri-safe-2-line" style="font-size: 4rem; color: rgba(255,255,255,0.2);"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ─── Row 3: Cards Keuangan / Aset / Nominal dengan Aksi Detail ─── #}
+    {# Menampilkan gambaran finansial keseluruhan + selisih kas kasir   #}
+    <div class="row g-6 mb-6">
+        {# Card: Total Pemasukan — seluruh pendapatan dari POS + Sales Order #}
+        <div class="col-sm-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 fraud-stat-card">
+                        <div class="avatar flex-shrink-0">
+                            <span class="avatar-initial rounded bg-label-success">
+                                <i class="ri-arrow-up-circle-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div class="flex-grow-1">
+                            <span class="d-block text-muted small">Total Pemasukan</span>
+                            <h5 class="mb-0 fw-bold text-success">Rp {{ total_pemasukan|floatformat:0 }}</h5>
+                            <small class="text-muted">POS + Sales Order</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer border-top py-2 text-center">
+                    <a href="{% url 'fraud_detection:alert_list' %}" class="text-primary small">
+                        <i class="ri-arrow-right-s-line me-1"></i>Lihat Detail
+                    </a>
+                </div>
+            </div>
+        </div>
+        {# Card: Total Pengeluaran — biaya dari Purchase Order + Biaya operasional #}
+        <div class="col-sm-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 fraud-stat-card">
+                        <div class="avatar flex-shrink-0">
+                            <span class="avatar-initial rounded bg-label-danger">
+                                <i class="ri-arrow-down-circle-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div class="flex-grow-1">
+                            <span class="d-block text-muted small">Total Pengeluaran</span>
+                            <h5 class="mb-0 fw-bold text-danger">Rp {{ total_pengeluaran|floatformat:0 }}</h5>
+                            <small class="text-muted">PO + Biaya</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer border-top py-2 text-center">
+                    <a href="{% url 'fraud_detection:alert_list' %}" class="text-primary small">
+                        <i class="ri-arrow-right-s-line me-1"></i>Lihat Detail
+                    </a>
+                </div>
+            </div>
+        </div>
+        {# Card: Selisih Keuangan — laba/rugi (pemasukan - pengeluaran) #}
+        <div class="col-sm-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 fraud-stat-card">
+                        <div class="avatar flex-shrink-0">
+                            <span class="avatar-initial rounded bg-label-{% if selisih_keuangan >= 0 %}info{% else %}warning{% endif %}">
+                                <i class="ri-exchange-dollar-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div class="flex-grow-1">
+                            <span class="d-block text-muted small">Selisih Keuangan</span>
+                            <h5 class="mb-0 fw-bold {% if selisih_keuangan >= 0 %}text-info{% else %}text-warning{% endif %}">
+                                Rp {{ selisih_keuangan|floatformat:0 }}
+                            </h5>
+                            <small class="text-muted">Pemasukan - Pengeluaran</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer border-top py-2 text-center">
+                    <a href="{% url 'fraud_detection:alert_list' %}" class="text-primary small">
+                        <i class="ri-arrow-right-s-line me-1"></i>Lihat Detail
+                    </a>
+                </div>
+            </div>
+        </div>
+        {# Card: Selisih Kas — total selisih rekonsiliasi kasir per shift #}
+        <div class="col-sm-6 col-xl-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 fraud-stat-card">
+                        <div class="avatar flex-shrink-0">
+                            <span class="avatar-initial rounded bg-label-{% if total_selisih_kas < 0 %}danger{% else %}success{% endif %}">
+                                <i class="ri-safe-2-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div class="flex-grow-1">
+                            <span class="d-block text-muted small">Selisih Kas Kasir</span>
+                            <h5 class="mb-0 fw-bold {% if total_selisih_kas < 0 %}text-danger{% else %}text-success{% endif %}">
+                                Rp {{ total_selisih_kas|floatformat:0 }}
+                            </h5>
+                            <small class="text-muted">Rekonsiliasi Shift</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer border-top py-2 text-center">
+                    <a href="{% url 'fraud_detection:cash_list' %}" class="text-primary small">
+                        <i class="ri-arrow-right-s-line me-1"></i>Lihat Detail
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 4: Tren Anomali (Wave/Area Chart) + Distribusi Jenis (Doughnut) -->
+    <div class="row mb-6">
+        <!-- Tren Anomali Bulanan — ApexCharts Area (Wave) -->
+        <div class="col-lg-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-line-chart-line me-2"></i>Tren Anomali Bulanan
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="trendAnomalyChart" style="min-height: 320px;"></div>
+                    {% if not trend_labels or trend_labels == '[]' %}
+                    <div class="text-center text-muted py-3">
+                        <i class="ri-bar-chart-box-line ri-48px mb-2 d-block" style="opacity:0.3;"></i>
+                        Belum ada data anomali
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Distribusi Jenis Anomali — ApexCharts Donut -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-pie-chart-line me-2"></i>Distribusi Jenis
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div id="jenisDistChart" style="min-height: 260px;"></div>
+                    {% if not jenis_labels or jenis_labels == '[]' %}
+                    <div class="text-center text-muted py-3">
+                        <i class="ri-pie-chart-line ri-48px mb-2 d-block" style="opacity:0.3;"></i>
+                        Belum ada data
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 4: Top 5 Karyawan Berisiko + Rekonsiliasi Kas Terbaru -->
+    <div class="row">
+        <!-- Top 5 Karyawan Berisiko -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-user-warning-line me-2"></i>Top 5 Karyawan Berisiko
+                    </h5>
+                    <a href="{% url 'fraud_detection:alert_list' %}" class="btn btn-sm btn-label-primary">Lihat Semua</a>
+                </div>
+                <div class="card-body">
+                    {% if risk_users %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th class="text-center">Total Alert</th>
+                                    <th class="text-end">Total Nominal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for u in risk_users %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar avatar-sm">
+                                                <span class="avatar-initial rounded-circle bg-label-danger">
+                                                    {{ u.user_terkait__first_name|default:u.user_terkait__username|first|upper }}
+                                                </span>
+                                            </div>
+                                            <span>{{ u.user_terkait__first_name }} {{ u.user_terkait__last_name|default:"" }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-label-danger rounded-pill">{{ u.total_alerts }}</span>
+                                    </td>
+                                    <td class="text-end fw-semibold">Rp {{ u.total_nominal|floatformat:0 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-5">
+                        <i class="ri-shield-check-line ri-48px mb-2 d-block" style="opacity:0.3;"></i>
+                        Tidak ada karyawan berisiko saat ini
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Rekonsiliasi Kas Terbaru -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-money-dollar-box-line me-2"></i>Rekonsiliasi Kas Terbaru
+                    </h5>
+                    <a href="{% url 'fraud_detection:cash_list' %}" class="btn btn-sm btn-label-primary">Lihat Semua</a>
+                </div>
+                <div class="card-body">
+                    {% if recent_reconciliations %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Kasir</th>
+                                    <th>Cabang</th>
+                                    <th class="text-end">Selisih</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in recent_reconciliations %}
+                                <tr>
+                                    <td>{{ r.kasir.get_full_name|default:r.kasir.username }}</td>
+                                    <td>{{ r.gudang.nama|default:"-" }}</td>
+                                    <td class="text-end fw-semibold {% if r.discrepancy < 0 %}text-danger{% elif r.discrepancy > 0 %}text-success{% endif %}">
+                                        Rp {{ r.discrepancy|floatformat:0 }}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-label-{% if r.status == 'matched' %}success{% elif r.status == 'unmatched' %}danger{% else %}warning{% endif %}">
+                                            {{ r.get_status_display }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-5">
+                        <i class="ri-money-dollar-box-line ri-48px mb-2 d-block" style="opacity:0.3;"></i>
+                        Belum ada data rekonsiliasi kas
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
+
+{% block page_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ═══ DETEKSI DARK MODE ═══
+    var isDark = typeof isDarkStyle !== 'undefined' ? isDarkStyle :
+                 (document.documentElement.classList.contains('dark-style') ||
+                  document.body.classList.contains('dark-style'));
+
+    var gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+    var labelColor = isDark ? '#b4b5ba' : '#a5a3ae';
+
+    // ═══ TREN ANOMALI — ApexCharts Area (Wave) ═══
+    var trendLabels = {{ trend_labels|safe }};
+    var trendValues = {{ trend_values|safe }};
+
+    if (trendLabels.length > 0 && document.querySelector('#trendAnomalyChart')) {
+        var trendOptions = {
+            chart: {
+                type: 'area',
+                height: 320,
+                fontFamily: 'Inter, -apple-system, sans-serif',
+                background: 'transparent',
+                toolbar: {
+                    show: true,
+                    tools: {
+                        download: '<i class="ri-download-2-line" style="font-size:16px"></i>',
+                        selection: false, zoom: false, zoomin: false,
+                        zoomout: false, pan: false, reset: false
+                    }
+                },
+                animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800,
+                    dynamicAnimation: { enabled: true, speed: 350 }
+                },
+                dropShadow: {
+                    enabled: true,
+                    top: 6, left: 0, blur: 6,
+                    opacity: isDark ? 0.15 : 0.08,
+                    color: '#7367f0'
+                }
+            },
+            colors: ['#7367f0'],
+            dataLabels: { enabled: false },
+            stroke: { curve: 'smooth', width: 3, lineCap: 'round' },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shade: isDark ? 'dark' : 'light',
+                    type: 'vertical',
+                    shadeIntensity: 0.3,
+                    opacityFrom: isDark ? 0.25 : 0.4,
+                    opacityTo: 0.02,
+                    stops: [0, 95, 100]
+                }
+            },
+            series: [{ name: 'Jumlah Anomali', data: trendValues }],
+            xaxis: {
+                categories: trendLabels,
+                labels: { style: { colors: labelColor, fontSize: '13px', fontWeight: 400 } },
+                axisBorder: { show: false },
+                axisTicks: { show: false },
+                crosshairs: { stroke: { color: isDark ? '#555' : '#ddd', dashArray: 4 } }
+            },
+            yaxis: {
+                labels: {
+                    style: { colors: labelColor, fontSize: '13px' },
+                    formatter: function(val) { return Math.round(val); }
+                }
+            },
+            tooltip: {
+                theme: isDark ? 'dark' : 'light',
+                shared: true, intersect: false,
+                style: { fontSize: '13px' },
+                y: { formatter: function(val) { return val + ' anomali'; } },
+                marker: { show: true }
+            },
+            legend: { show: false },
+            markers: {
+                size: 5, hover: { size: 7, sizeOffset: 2 },
+                strokeWidth: 2, strokeColors: isDark ? '#2b2c40' : '#fff'
+            },
+            grid: {
+                borderColor: gridColor,
+                strokeDashArray: 4,
+                padding: { top: -10, left: 10, right: 10, bottom: 0 },
+                xaxis: { lines: { show: false } },
+                yaxis: { lines: { show: true } }
+            }
+        };
+
+        var trendChart = new ApexCharts(document.querySelector('#trendAnomalyChart'), trendOptions);
+        trendChart.render();
+    }
+
+    // ═══ DISTRIBUSI JENIS — ApexCharts Donut ═══
+    var jenisLabels = {{ jenis_labels|safe }};
+    var jenisValues = {{ jenis_values|safe }};
+
+    if (jenisLabels.length > 0 && document.querySelector('#jenisDistChart')) {
+        var chartColors = ['#7367f0', '#28c76f', '#ff9f43', '#ea5455', '#00cfe8', '#a855f7', '#f472b6'];
+
+        var donutOptions = {
+            chart: {
+                type: 'donut',
+                height: 260,
+                fontFamily: 'Inter, -apple-system, sans-serif',
+                background: 'transparent',
+                animations: { enabled: true, easing: 'easeinout', speed: 800 }
+            },
+            series: jenisValues,
+            labels: jenisLabels,
+            colors: chartColors.slice(0, jenisLabels.length),
+            stroke: { width: 2, colors: [isDark ? '#2b2c40' : '#fff'] },
+            dataLabels: { enabled: false },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '60%',
+                        labels: {
+                            show: true,
+                            name: { show: true, fontSize: '13px', color: labelColor },
+                            value: {
+                                show: true, fontSize: '18px', fontWeight: 700,
+                                color: isDark ? '#fff' : '#333',
+                                formatter: function(val) { return val; }
+                            },
+                            total: {
+                                show: true, label: 'Total',
+                                color: labelColor,
+                                formatter: function(w) {
+                                    return w.globals.spieSeries.reduce(function(a, b) { return a + b; }, 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            legend: {
+                position: 'bottom',
+                fontSize: '13px',
+                labels: { colors: isDark ? '#ccc' : '#555' },
+                markers: { size: 6, strokeWidth: 0, offsetX: -3 },
+                itemMargin: { horizontal: 8, vertical: 4 }
+            },
+            tooltip: {
+                theme: isDark ? 'dark' : 'light',
+                y: { formatter: function(val) { return val + ' kasus'; } }
+            }
+        };
+
+        var donutChart = new ApexCharts(document.querySelector('#jenisDistChart'), donutOptions);
+        donutChart.render();
+    }
+});
+</script>
+{% endblock page_js %}

@@ -1,0 +1,316 @@
+{% extends 'layout/layout_vertical.html' %}
+{% comment %}
+==========================================================================
+   METODE PEMBAYARAN DETAIL - Detail Metode Pembayaran
+   Halaman detail metode pembayaran.
+   Info: nama, kode, keterangan, tanggal dibuat.
+   ==========================================================================
+{% endcomment %}
+{% load static %}
+{% load i18n %}
+{% load currency_filters %}
+
+{% block title %}Detail Metode Pembayaran - {{ metode.nama }}{% endblock title %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <!-- Header -->
+    <div class="mb-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb breadcrumb-style1">
+                <li class="breadcrumb-item">
+                    <a href="{% url 'pengaturan:metode_pembayaran_list' %}">Metode Pembayaran</a>
+                </li>
+                <li class="breadcrumb-item active">Detail</li>
+            </ol>
+        </nav>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h4 class="mb-1">Detail Metode Pembayaran</h4>
+                <p class="text-muted mb-0">Informasi lengkap metode pembayaran</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'pengaturan:metode_pembayaran_update' metode.pk %}" class="btn btn-primary">
+                    <i class="ri-edit-line me-1"></i> Edit
+                </a>
+                <a href="{% url 'pengaturan:metode_pembayaran_list' %}" class="btn btn-label-secondary">
+                    <i class="ri-arrow-left-line me-1"></i> Kembali
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Kolom Kiri: Informasi Utama -->
+        <div class="col-xl-8 col-lg-7">
+            <!-- Card Utama -->
+            <div class="card mb-4">
+                <div class="card-header pb-0">
+                    <h5 class="mb-0">Informasi Metode Pembayaran</h5>
+                </div>
+                <div class="card-body pt-4">
+                    <div class="row g-4">
+                        <!-- Logo/Gambar — kolom kiri -->
+                        <div class="col-12 col-md-4 text-center">
+                            {% if metode.gambar %}
+                            <img src="{{ metode.gambar.url }}" alt="{{ metode.nama }}" 
+                                class="rounded-3 border shadow-sm img-fluid" 
+                                style="max-width: 100%; width: 240px; height: 240px; object-fit: contain; background: #f5f5f9;">
+                            {% else %}
+                            <div class="d-flex justify-content-center align-items-center rounded-3 border bg-light mx-auto"
+                                style="width: 240px; height: 240px;">
+                                <i class="ri-wallet-3-line text-muted" style="font-size: 5rem;"></i>
+                            </div>
+                            <small class="text-muted d-block mt-2">Tidak ada gambar</small>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Info Detail — kolom kanan, menggunakan list-group agar sejajar -->
+                        <div class="col-12 col-md-8">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
+                                    <span class="text-muted">Nama Metode</span>
+                                    <span class="fw-bold fs-6">{{ metode.nama }}</span>
+                                </li>
+                                {% if metode.nama_pemilik %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
+                                    <span class="text-muted">Nama Pemilik</span>
+                                    <span class="fw-semibold">{{ metode.nama_pemilik }}</span>
+                                </li>
+                                {% endif %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
+                                    <span class="text-muted">Kode</span>
+                                    <span class="badge bg-label-primary fs-6">{{ metode.kode }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
+                                    <span class="text-muted">Status</span>
+                                    <span class="badge bg-{% if metode.aktif %}success{% else %}secondary{% endif %}">
+                                        <i class="ri-{% if metode.aktif %}check{% else %}close{% endif %}-line me-1"></i>
+                                        {% if metode.aktif %}Aktif{% else %}Nonaktif{% endif %}
+                                    </span>
+                                </li>
+                                {% if metode.deskripsi %}
+                                <li class="list-group-item d-flex justify-content-between align-items-start px-0 py-3">
+                                    <span class="text-muted me-3">Deskripsi</span>
+                                    <span class="text-end">{{ metode.deskripsi }}</span>
+                                </li>
+                                {% endif %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-3">
+                                    <span class="text-muted">Dibuat</span>
+                                    <span class="small">{{ metode.dibuat_pada|date:"d M Y, H:i" }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-3 border-bottom-0">
+                                    <span class="text-muted">Terakhir Diubah</span>
+                                    <span class="small">{{ metode.diubah_pada|date:"d M Y, H:i" }}</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card Keuangan -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-money-dollar-circle-line me-2"></i>Informasi Keuangan</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <!-- Saldo Saat Ini -->
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center p-3 rounded-3 {% if saldo_terhitung >= 0 %}bg-label-primary{% else %}bg-label-danger{% endif %}">
+                                <div class="d-flex justify-content-center align-items-center rounded-circle {% if saldo_terhitung >= 0 %}bg-primary{% else %}bg-danger{% endif %} me-3" 
+                                    style="width: 42px; height: 42px; min-width: 42px;">
+                                    <i class="ri-wallet-2-line text-white" style="font-size: 1.25rem;"></i>
+                                </div>
+                                <div style="min-width: 0;">
+                                    <p class="mb-0 text-muted small">Saldo Saat Ini</p>
+                                    <h6 class="mb-0 {% if saldo_terhitung >= 0 %}text-primary{% else %}text-danger{% endif %} fw-bold">{{ saldo_terhitung|rupiah }}</h6>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Saldo awal: {{ metode.saldo|rupiah }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Total Pendapatan -->
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center p-3 rounded-3 bg-label-success">
+                                <div class="d-flex justify-content-center align-items-center rounded-circle bg-success me-3" 
+                                    style="width: 42px; height: 42px; min-width: 42px;">
+                                    <i class="ri-arrow-down-circle-line text-white" style="font-size: 1.25rem;"></i>
+                                </div>
+                                <div style="min-width: 0;">
+                                    <p class="mb-0 text-muted small">Total Pendapatan</p>
+                                    <h6 class="mb-0 text-success fw-bold">{{ total_pendapatan|rupiah }}</h6>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Tertinggi: {{ pendapatan_tertinggi|rupiah }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Total Pengeluaran -->
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center p-3 rounded-3 bg-label-danger">
+                                <div class="d-flex justify-content-center align-items-center rounded-circle bg-danger me-3" 
+                                    style="width: 42px; height: 42px; min-width: 42px;">
+                                    <i class="ri-arrow-up-circle-line text-white" style="font-size: 1.25rem;"></i>
+                                </div>
+                                <div style="min-width: 0;">
+                                    <p class="mb-0 text-muted small">Total Pengeluaran</p>
+                                    <h6 class="mb-0 text-danger fw-bold">{{ total_pengeluaran|rupiah }}</h6>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Tertinggi: {{ pengeluaran_tertinggi|rupiah }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card Statistik Transaksi -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-bar-chart-box-line me-2"></i>Statistik Penggunaan</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-sm-6">
+                            <div class="d-flex align-items-center p-3 border rounded-3">
+                                <div class="d-flex justify-content-center align-items-center rounded-circle bg-label-info me-3" 
+                                    style="width: 42px; height: 42px; min-width: 42px;">
+                                    <i class="ri-shopping-cart-2-line"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-0">Total Transaksi</h6>
+                                    <small class="text-muted">Menggunakan metode ini</small>
+                                </div>
+                                <h4 class="mb-0 text-info">{{ total_transaksi }}</h4>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="d-flex align-items-center p-3 border rounded-3">
+                                <div class="d-flex justify-content-center align-items-center rounded-circle bg-label-success me-3" 
+                                    style="width: 42px; height: 42px; min-width: 42px;">
+                                    <i class="ri-check-double-line"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-0">Transaksi Lunas</h6>
+                                    <small class="text-muted">Status completed</small>
+                                </div>
+                                <h4 class="mb-0 text-success">{{ transaksi_lunas }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card Riwayat -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-history-line me-2"></i>Riwayat</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-sm-6">
+                            <div class="d-flex align-items-center p-3 border rounded-3">
+                                <div class="d-flex justify-content-center align-items-center rounded-circle bg-label-primary me-3" 
+                                    style="width: 42px; height: 42px; min-width: 42px;">
+                                    <i class="ri-add-circle-line"></i>
+                                </div>
+                                <div>
+                                    <small class="text-muted d-block">Dibuat</small>
+                                    <span class="fw-medium">{{ metode.dibuat_pada|date:"d F Y, H:i" }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="d-flex align-items-center p-3 border rounded-3">
+                                <div class="d-flex justify-content-center align-items-center rounded-circle bg-label-info me-3" 
+                                    style="width: 42px; height: 42px; min-width: 42px;">
+                                    <i class="ri-edit-line"></i>
+                                </div>
+                                <div>
+                                    <small class="text-muted d-block">Terakhir Diubah</small>
+                                    <span class="fw-medium">{{ metode.diubah_pada|date:"d F Y, H:i" }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kolom Kanan: Ringkasan -->
+        <div class="col-xl-4 col-lg-5 mt-4 mt-lg-0">
+            <!-- Ringkasan Card -->
+            <div class="card mb-4" style="background: linear-gradient(135deg, #696cff 0%, #8385ff 100%);">
+                <div class="card-body">
+                    <h5 class="text-white mb-4">
+                        <i class="ri-file-list-3-line me-2"></i>Ringkasan
+                    </h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0" style="border-collapse: separate; border-spacing: 0 8px;">
+                            <tbody>
+                                <tr>
+                                    <td class="py-2 px-0 border-0" style="color: rgba(255,255,255,0.7);">Nama</td>
+                                    <td class="py-2 px-0 border-0 text-end text-white fw-medium">{{ metode.nama }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-0 border-0" style="color: rgba(255,255,255,0.7);">Kode</td>
+                                    <td class="py-2 px-0 border-0 text-end">
+                                        <span class="badge bg-white text-primary">{{ metode.kode }}</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-0 border-0" style="color: rgba(255,255,255,0.7);">Status</td>
+                                    <td class="py-2 px-0 border-0 text-end">
+                                        <span class="badge {% if metode.aktif %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {% if metode.aktif %}Aktif{% else %}Nonaktif{% endif %}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-0 border-0" style="color: rgba(255,255,255,0.7);">Logo</td>
+                                    <td class="py-2 px-0 border-0 text-end text-white">{% if metode.gambar %}Ada{% else %}Tidak ada{% endif %}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <hr style="border-color: rgba(255,255,255,0.2); margin: 1rem 0;">
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span style="color: rgba(255,255,255,0.7);">Saldo</span>
+                        <span class="text-white fw-bold fs-5">{{ metode.saldo|rupiah }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span style="color: rgba(255,255,255,0.7);">Total Pendapatan</span>
+                        <span class="text-white fw-bold fs-5">{{ total_pendapatan|rupiah }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span style="color: rgba(255,255,255,0.7);">Total Pengeluaran</span>
+                        <span class="text-white fw-bold fs-5">{{ total_pengeluaran|rupiah }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span style="color: rgba(255,255,255,0.7);">Total Transaksi</span>
+                        <span class="text-white fw-bold fs-5">{{ total_transaksi }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="mb-3"><i class="ri-settings-3-line me-2"></i>Aksi Cepat</h6>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'pengaturan:metode_pembayaran_update' metode.pk %}" class="btn btn-outline-primary">
+                            <i class="ri-edit-box-line me-2"></i>Edit Metode
+                        </a>
+                        <a href="{% url 'pos:index' %}" class="btn btn-outline-info">
+                            <i class="ri-shopping-cart-2-line me-2"></i>Buka POS
+                        </a>
+                        <a href="{% url 'pengaturan:metode_pembayaran_list' %}" class="btn btn-outline-secondary">
+                            <i class="ri-list-check me-2"></i>Lihat Semua Metode
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

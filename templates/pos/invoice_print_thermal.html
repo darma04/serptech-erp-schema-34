@@ -1,0 +1,428 @@
+{% comment %}
+==========================================================================
+   POS INVOICE PRINT THERMAL — Cetak Struk untuk Printer Thermal
+   Template cetak khusus printer thermal (58mm / 80mm).
+   Layout: minimalis, font kecil, tanpa margin berlebihan.
+   Auto-print saat halaman dibuka.
+   ==========================================================================
+{% endcomment %}
+{% load currency_filters %}
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Struk {{ transaction.nomor_transaksi }}</title>
+    <style>
+        /* ===== RESET ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* ===== BASE — ukuran kertas thermal ===== */
+        body {
+            font-family: 'Courier New', 'Consolas', 'Lucida Console', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+            color: #000;
+            background: #f5f5f5;
+            padding: 10px;
+        }
+
+        .receipt {
+            {% if paper_width == '58' %}
+            width: 48mm;      /* 58mm - margin */
+            {% else %}
+            width: 72mm;      /* 80mm - margin */
+            {% endif %}
+            margin: 0 auto;
+            background: #fff;
+            padding: 8px;
+            border: 1px dashed #ccc;
+        }
+
+        /* ===== HEADER TOKO ===== */
+        .receipt-header {
+            text-align: center;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 8px;
+        }
+
+        .receipt-header .shop-name {
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .receipt-header .shop-address {
+            font-size: 9px;
+            color: #333;
+            margin-top: 2px;
+        }
+
+        .receipt-header .shop-phone {
+            font-size: 9px;
+            color: #333;
+        }
+
+        /* ===== INFO TRANSAKSI ===== */
+        .receipt-info {
+            font-size: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 6px;
+        }
+
+        .receipt-info .info-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .receipt-info .info-label {
+            color: #555;
+        }
+
+        /* ===== DAFTAR ITEM ===== */
+        .receipt-items {
+            padding-bottom: 6px;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 6px;
+        }
+
+        .receipt-item {
+            margin-bottom: 4px;
+        }
+
+        .receipt-item .item-name {
+            font-weight: bold;
+            font-size: 10px;
+            display: block;
+        }
+
+        .receipt-item .item-detail {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            padding-left: 8px;
+        }
+
+        .receipt-item .item-qty-price {
+            color: #555;
+        }
+
+        /* ===== RINGKASAN TOTAL ===== */
+        .receipt-totals {
+            padding-bottom: 6px;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 6px;
+        }
+
+        .receipt-totals .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            padding: 1px 0;
+        }
+
+        .receipt-totals .total-row.grand-total {
+            font-size: 14px;
+            font-weight: bold;
+            border-top: 1px solid #000;
+            margin-top: 4px;
+            padding-top: 4px;
+        }
+
+        .receipt-totals .total-row.diskon {
+            color: #c00;
+        }
+
+        /* ===== PEMBAYARAN ===== */
+        .receipt-payment {
+            padding-bottom: 6px;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 6px;
+        }
+
+        .receipt-payment .payment-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            padding: 1px 0;
+        }
+
+        .receipt-payment .payment-row.kembalian {
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        /* ===== FOOTER ===== */
+        .receipt-footer {
+            text-align: center;
+            font-size: 9px;
+            color: #555;
+            padding-top: 4px;
+        }
+
+        .receipt-footer .footer-thanks {
+            font-size: 11px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 4px;
+        }
+
+        .receipt-footer .footer-time {
+            font-size: 8px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* ===== CATATAN ===== */
+        .receipt-notes {
+            font-size: 9px;
+            color: #555;
+            padding: 4px 0;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 6px;
+        }
+
+        .receipt-notes strong {
+            color: #000;
+        }
+
+        /* ===== SEPARATOR LINE ===== */
+        .dashed-line {
+            border: none;
+            border-top: 1px dashed #000;
+            margin: 6px 0;
+        }
+
+        /* ===== PRINT STYLES ===== */
+        @media print {
+            body {
+                padding: 0;
+                margin: 0;
+                background: #fff;
+            }
+
+            .receipt {
+                border: none;
+                padding: 2mm;
+                margin: 0;
+                {% if paper_width == '58' %}
+                width: 58mm;
+                {% else %}
+                width: 80mm;
+                {% endif %}
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            @page {
+                {% if paper_width == '58' %}
+                size: 58mm auto;
+                {% else %}
+                size: 80mm auto;
+                {% endif %}
+                margin: 0;
+            }
+        }
+
+        /* ===== TOMBOL KONTROL (tidak tercetak) ===== */
+        .print-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin: 15px auto;
+        }
+
+        .print-controls button {
+            padding: 8px 16px;
+            border: 1px solid #999;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            background: #fff;
+            white-space: nowrap;
+        }
+
+        .print-controls button.primary {
+            background: #696cff;
+            color: #fff;
+            border-color: #696cff;
+            font-weight: bold;
+        }
+
+        .print-controls button:hover {
+            opacity: 0.85;
+        }
+
+        /* ===== PAPER SIZE SELECTOR ===== */
+        .paper-selector {
+            text-align: center;
+            margin-bottom: 10px;
+            {% if paper_width == '58' %}
+            max-width: 48mm;
+            {% else %}
+            max-width: 72mm;
+            {% endif %}
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .paper-selector a {
+            display: inline-block;
+            padding: 4px 10px;
+            font-size: 11px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            text-decoration: none;
+            color: #333;
+            margin: 0 2px;
+        }
+
+        .paper-selector a.active {
+            background: #696cff;
+            color: #fff;
+            border-color: #696cff;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Tombol kontrol (tidak tercetak) -->
+    <div class="print-controls no-print">
+        <button class="primary" onclick="window.print()">🖨️ Cetak Struk</button>
+        <button onclick="window.close()">✕ Tutup</button>
+    </div>
+
+    <!-- Pilih ukuran kertas (tidak tercetak) -->
+    <div class="paper-selector no-print">
+        <a href="?format=thermal&paper=58" class="{% if paper_width == '58' %}active{% endif %}">58mm</a>
+        <a href="?format=thermal&paper=80" class="{% if paper_width == '80' %}active{% endif %}">80mm</a>
+    </div>
+
+    <!-- ===== STRUK ===== -->
+    <div class="receipt">
+
+        <!-- HEADER TOKO -->
+        <div class="receipt-header">
+            <div class="shop-name">{{ template.header_nama_perusahaan }}</div>
+            <div class="shop-address">{{ template.header_alamat }}</div>
+            <div class="shop-phone">Telp: {{ template.header_telepon }}</div>
+        </div>
+
+        <!-- INFO TRANSAKSI -->
+        <div class="receipt-info">
+            <div class="info-row">
+                <span class="info-label">No:</span>
+                <span>{{ transaction.nomor_transaksi }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Tgl:</span>
+                <span>{{ transaction.tanggal|date:"d/m/Y H:i" }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Kasir:</span>
+                <span>{{ transaction.kasir.get_full_name|default:transaction.kasir.username }}</span>
+            </div>
+            {% if transaction.nama_customer and transaction.nama_customer != "Umum" %}
+            <div class="info-row">
+                <span class="info-label">Customer:</span>
+                <span>{{ transaction.nama_customer }}</span>
+            </div>
+            {% endif %}
+            <div class="info-row">
+                <span class="info-label">Gudang:</span>
+                <span>{{ transaction.gudang.nama }}</span>
+            </div>
+        </div>
+
+        <!-- DAFTAR ITEM -->
+        <div class="receipt-items">
+            {% for item in transaction.items.all %}
+            <div class="receipt-item">
+                <span class="item-name">{{ item.produk.nama }}</span>
+                <div class="item-detail">
+                    <span class="item-qty-price">
+                        {{ item.jumlah }}{{ item.produk.satuan.singkatan|default:"pcs" }} x {{ item.harga_satuan|rupiah }}
+                    </span>
+                    <span>{{ item.subtotal|rupiah }}</span>
+                </div>
+                {% if item.diskon > 0 %}
+                <div class="item-detail" style="color: #c00;">
+                    <span class="item-qty-price">Diskon</span>
+                    <span>-{{ item.diskon|rupiah }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- RINGKASAN TOTAL -->
+        <div class="receipt-totals">
+            {% if transaction.diskon > 0 %}
+            <div class="total-row diskon">
+                <span>Diskon:</span>
+                <span>-{{ transaction.diskon|rupiah }}</span>
+            </div>
+            {% endif %}
+            {% if transaction.pajak > 0 %}
+            <div class="total-row">
+                <span>Pajak:</span>
+                <span>{{ transaction.pajak|rupiah }}</span>
+            </div>
+            {% endif %}
+            <div class="total-row grand-total">
+                <span>TOTAL</span>
+                <span>{{ transaction.total_harga|rupiah }}</span>
+            </div>
+        </div>
+
+        <!-- PEMBAYARAN -->
+        <div class="receipt-payment">
+            <div class="payment-row">
+                <span>Bayar ({{ transaction.metode_pembayaran.nama|default:"-" }}):</span>
+                <span>{{ transaction.jumlah_bayar|rupiah }}</span>
+            </div>
+            <div class="payment-row kembalian">
+                <span>Kembali:</span>
+                <span>{{ transaction.kembalian|rupiah }}</span>
+            </div>
+        </div>
+
+        <!-- CATATAN -->
+        {% if transaction.catatan %}
+        <div class="receipt-notes">
+            <strong>Catatan:</strong> {{ transaction.catatan }}
+        </div>
+        {% endif %}
+
+        <!-- FOOTER -->
+        <div class="receipt-footer">
+            <div class="footer-thanks">{{ template.footer_ucapan }}</div>
+            <div>{{ template.footer_keterangan }}</div>
+            <div class="footer-time">Dicetak: {% now "d/m/Y H:i" %} WIB</div>
+        </div>
+
+    </div>
+
+    <script>
+        // Auto-print saat halaman dimuat
+        window.onload = function () {
+            // Beri sedikit delay agar rendering selesai
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        }
+    </script>
+</body>
+
+</html>

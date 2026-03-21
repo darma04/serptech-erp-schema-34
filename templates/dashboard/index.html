@@ -1,0 +1,1209 @@
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# DASHBOARD UTAMA — Halaman utama setelah login                        #}
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# File ini menampilkan ringkasan data bisnis:                          #}
+{# - Ringkasan Penjualan (total aset, harga beli, harga jual)          #}
+{# - Estimasi Keuntungan & Profit Margin                                #}
+{# - Grafik Penjualan Bulan Ini (area chart)                           #}
+{# - Grafik Keuntungan per Cabang (bar chart)                          #}
+{# - Grafik Biaya per Kategori (bar chart)                             #}
+{# - Slider Penjualan Mingguan (Swiper carousel)                       #}
+{# - Slider Metode Pembayaran (Swiper carousel)                        #}
+{# - Tabel Produk Terlaris                                             #}
+{# - Tabel Pengguna Terbaru                                            #}
+{# - Timeline Aktivitas Terkini                                        #}
+{# - Filter Tanggal, Jam Realtime, Lokasi, IP Address                  #}
+{#                                                                      #}
+{# Terhubung dengan:                                                    #}
+{# - apps/dashboard/views.py → DashboardView menyiapkan semua data     #}
+{# - config/context_processors.py → Data user dan pengaturan global    #}
+{# - apps/produk/models.py → Data produk dan stok                      #}
+{# - apps/penjualan/models.py → Data penjualan                        #}
+{# - apps/pembelian/models.py → Data pembelian                        #}
+{# - apps/biaya/models.py → Data biaya operasional                     #}
+{# ══════════════════════════════════════════════════════════════════════ #}
+
+{# Extend layout utama — mewarisi struktur HTML (header, sidebar, footer) #}
+{% extends layout_path %}
+
+{# Load template tags yang dibutuhkan #}
+{% load static %}         {# Tag {% static %} untuk URL file statis (CSS, JS, gambar) #}
+{% load currency_filters %} {# Filter kustom |rupiah untuk format mata uang Indonesia #}
+{% load i18n %}            {# Tag internasionalisasi (multi-bahasa) #}
+
+{# Judul halaman — muncul di tab browser #}
+{% block title %}Dashboard - eCommerce{% endblock title %}
+
+{# ═══ VENDOR CSS — Library CSS eksternal yang dibutuhkan dashboard ═══ #}
+{% block vendor_css %}
+{{ block.super }}  {# Memuat CSS dari parent template terlebih dahulu #}
+{# DataTables CSS — untuk tabel interaktif (sorting, searching, pagination) #}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+{# ApexCharts CSS — untuk grafik/chart (penjualan, keuntungan, biaya) #}
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+{# Swiper CSS — untuk slider/carousel (penjualan mingguan, metode pembayaran) #}
+<link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
+{% endblock vendor_css %}
+
+{# ═══ VENDOR JS — Library JavaScript eksternal ═══ #}
+{% block vendor_js %}
+{{ block.super }}  {# Memuat JS dari parent template terlebih dahulu #}
+{# DataTables JS — engine tabel interaktif #}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+{# ApexCharts JS — library untuk membuat grafik/chart interaktif #}
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+{# Swiper JS — library untuk slider/carousel yang responsif #}
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block page_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/css/pages/cards-analytics.css' %}" />
+{# CSS Kustom Dashboard — Styling badge dan layout yang tidak ada di Bootstrap #}
+<style>
+  /* Badge angka pada slider penjualan mingguan (latar semi-transparan putih) */
+  .weekly-sales-text-bg-primary {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #fff !important;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.375rem;
+  }
+
+  /* Badge angka penjualan (latar ungu semi-transparan) */
+  .sales-text-bg {
+    background-color: rgba(102, 108, 255, 0.16);
+    color: #666cff !important;
+    padding: 0.35rem 0.75rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    min-width: 90px;
+    text-align: center;
+    display: inline-block;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  /* Badge statistik metode pembayaran pada slider */
+  /* Warna abu-abu dengan teks gelap — support dark & light mode */
+  .payment-stat-badge {
+    background-color: rgba(0, 0, 0, 0.06);
+    color: #5a5c61;
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    min-width: auto;
+    width: 100%;
+    text-align: center;
+    display: inline-block;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    box-sizing: border-box;
+  }
+  .payment-stat-badge:hover {
+    background-color: rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Dark mode: badge metode pembayaran abu-abu gelap */
+  [data-theme="dark"] .payment-stat-badge,
+  .dark-style .payment-stat-badge {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #b4b5ba;
+    border: none;
+  }
+  [data-theme="dark"] .payment-stat-badge:hover,
+  .dark-style .payment-stat-badge:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     MOBILE ≤ 576px — Hanya styling SPESIFIK dashboard
+     (Aturan umum sudah di global styles.html)
+     ═══════════════════════════════════════════════════════════════════ */
+  @media (max-width: 576px) {
+
+    /* ─── Card subtitle & info dashboard ─── */
+    .card .card-subtitle { font-size: 0.75rem; }
+    .card .card-info p.mb-0 { font-size: 0.8rem; }
+
+    /* ─── Ringkasan Penjualan: gap rapat ─── */
+    .card-body.d-flex.justify-content-between.flex-wrap {
+      gap: 0.75rem !important;
+    }
+    .card-body .d-flex.align-items-center.gap-3 {
+      gap: 0.5rem !important;
+    }
+
+    /* ─── Badge slider (khusus dashboard) ─── */
+    .payment-stat-badge {
+      min-width: 70px;
+      padding: 0.3rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    .sales-text-bg {
+      min-width: 65px;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+    }
+
+    /* ─── Weekly Sales Swiper ─── */
+    .swiper-container .swiper-slide {
+      padding: 0.875rem !important;
+    }
+    .swiper-container .swiper-slide .row {
+      --bs-gutter-x: 0.5rem;
+    }
+    .weekly-sales-img {
+      max-height: 140px !important;
+      width: 140px !important;
+    }
+    .swiper-sales .swiper-slide {
+      padding: 0.875rem !important;
+    }
+
+    /* ─── Timeline ─── */
+    .timeline .timeline-item { padding-bottom: 0.75rem; }
+    .timeline .timeline-header { margin-bottom: 0.375rem !important; }
+    .timeline .timeline-event p { font-size: 0.8rem; margin-bottom: 0.375rem !important; }
+
+    /* ─── Chart min-height ─── */
+    #liveVisitors, #visitsByDayChart { min-height: 180px; }
+
+    /* ─── Divider Gudang & Produk ─── */
+    .divider.divider-vertical { margin: 0 !important; }
+
+    /* ─── Filter bar margin ─── */
+    .dash-filter-card { margin-bottom: 0.75rem !important; }
+
+    /* ─── Icon posisi absolute (Estimasi/Profit) ─── */
+    .card .position-absolute[style*="top: 1.5rem; right: 1.5rem"] {
+      top: 0.875rem !important;
+      right: 0.875rem !important;
+    }
+
+    /* ─── Marketing slider compact ─── */
+    .swiper-sales .d-flex.align-items-center.mt-4 { margin-top: 0.75rem !important; }
+    .swiper-sales .d-flex.flex-column.ms-4 { margin-left: 0.75rem !important; }
+    .swiper-sales .row.g-3 { --bs-gutter-y: 0.375rem; --bs-gutter-x: 0.375rem; }
+    .swiper-sales .mt-4:last-child { margin-top: 0.75rem !important; }
+
+    /* ─── Total Pembelian/Biaya ─── */
+    .card .d-flex.align-items-center.gap-4 { gap: 0.75rem !important; }
+  }
+</style>
+{% endblock page_css %}
+
+{% block page_js %}
+{# ═══ DATA JSON DARI SERVER (Django → JavaScript) ═══ #}
+{# Tag json_script Django mengkonversi data Python ke JSON yang aman untuk HTML #}
+{# Data ini akan dibaca oleh JavaScript untuk membuat grafik chart #}
+{{ sales_chart_data|json_script:"sales-chart-data" }}     {# Data angka penjualan per tanggal #}
+{{ sales_chart_labels|json_script:"sales-chart-labels" }}   {# Label tanggal untuk sumbu X chart #}
+
+{{ sales_cabang_labels|json_script:"sales-cabang-labels" }}
+{{ sales_cabang_series|json_script:"sales-cabang-series" }}
+
+{{ block.super }}
+<script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
+<script>
+  'use strict';  // Mode ketat JavaScript — mencegah penggunaan variabel tanpa deklarasi
+
+  // ═══════════════════════════════════════════════════════════════
+  // INISIALISASI SETELAH DOM SIAP
+  // ═══════════════════════════════════════════════════════════════
+  // Semua kode chart dan Swiper berjalan setelah HTML selesai dimuat
+  document.addEventListener('DOMContentLoaded', function () {
+
+    // ─── DETEKSI MODE TERANG/GELAP ───
+    // Memilih palet warna yang sesuai berdasarkan tema
+    // isDarkStyle = variabel global dari template helper
+    let cardColor, headingColor, labelColor, borderColor, legendColor;
+
+    if (isDarkStyle) {
+      // Warna untuk mode gelap (dark mode)
+      cardColor = config.colors_dark.cardColor;
+      headingColor = config.colors_dark.headingColor;
+      labelColor = config.colors_dark.textMuted;
+      legendColor = config.colors_dark.bodyColor;
+      borderColor = config.colors_dark.borderColor;
+    } else {
+      // Warna untuk mode terang (light mode)
+      cardColor = config.colors.cardColor;
+      headingColor = config.colors.headingColor;
+      labelColor = config.colors.textMuted;
+      legendColor = config.colors.bodyColor;
+      borderColor = config.colors.borderColor;
+    }
+
+    // ─── SWIPER: SLIDER PENJUALAN MINGGUAN ───
+    // Carousel otomatis yang menampilkan data penjualan mingguan per kategori produk
+    // Bergeser otomatis setiap 2.5 detik, bisa diklik paginationnya
+    const swiperWithBgPagination = document.querySelector('#swiper-weekly-sales-with-bg');
+    if (swiperWithBgPagination) {
+      new Swiper(swiperWithBgPagination, {
+        loop: true,         // Loop terus (setelah slide terakhir → kembali ke pertama)
+        autoplay: { delay: 2500, disableOnInteraction: false },  // Otomatis geser
+        pagination: { clickable: true, el: '.swiper-pagination' }  // Dot pagination bisa diklik
+      });
+    }
+
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // GRAFIK AREA: PENJUALAN BULAN INI
+    // ═══════════════════════════════════════════════════════════════
+    // Grafik area (area chart) yang menampilkan tren penjualan harian
+    // selama bulan berjalan. Data diambil dari tag JSON Django.
+    // Library: ApexCharts
+    // ─────────────────────────────────────────────────────────────────
+    const saleThisMonthChartEl = document.querySelector('#saleThisMonthChart'),
+      // Ambil label tanggal dari JSON yang di-inject Django ke HTML
+      chartLabelsEl = document.getElementById('sales-chart-labels'),
+      chartLabels = chartLabelsEl ? JSON.parse(chartLabelsEl.textContent) : [],
+      saleThisMonthChartConfig = {
+        chart: {
+          height: 120,         // Tinggi chart 120px (compact)
+          type: 'area',        // Tipe: area chart (garis + fill di bawah)
+          parentHeightOffset: 0,
+          toolbar: { show: false },   // Sembunyikan toolbar chart
+          sparkline: { enabled: true } // Mode sparkline (chart minimal tanpa axis)
+        },
+        grid: {
+          xaxis: { lines: { show: false } },
+          yaxis: { lines: { show: false } },
+          padding: { top: 0, left: 0, right: 0, bottom: 0 }
+        },
+        tooltip: {
+          enabled: true,
+          x: { show: true, formatter: function(val, opts) { return 'Tgl ' + (chartLabels[opts.dataPointIndex] || val); } },
+          y: { formatter: function(val) { return 'Rp ' + val.toLocaleString('id-ID'); } }
+        },
+        colors: [config.colors.primary],
+        fill: {
+          type: 'gradient',
+          gradient: { shade: 'light', type: 'vertical', shadeIntensity: 0.4, opacityFrom: 0.8, opacityTo: 0.1, stops: [0, 100] }
+        },
+        stroke: { width: 2, curve: 'smooth' },
+        series: [{ name: 'Penjualan', data: JSON.parse(document.getElementById('sales-chart-data').textContent) }],
+        xaxis: {
+          labels: { show: false },
+          axisTicks: { show: false },
+          axisBorder: { show: false },
+          categories: chartLabels
+        },
+        yaxis: { min: 0, labels: { show: false } }
+      };
+    if (saleThisMonthChartEl) {
+      const saleThisMonthChart = new ApexCharts(saleThisMonthChartEl, saleThisMonthChartConfig);
+      saleThisMonthChart.render();
+    }
+
+    // (Bagian chart Pembelian/Biaya, Keuntungan per Cabang, dan Biaya per Kategori telah dihapus)
+    // ═══════════════════════════════════════════════════════════════
+
+
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // FUNGSI MANAJEMEN USER DI DASHBOARD
+  // ═══════════════════════════════════════════════════════════════
+
+  // ─── TOGGLE STATUS USER (Aktif/Nonaktif) ───
+  // Mengubah status aktif/nonaktif user dari tabel di dashboard
+  // Saat ini masih placeholder, belum terintegrasi dengan backend
+  function toggleUserStatus(userId) {
+    if (confirm('Apakah Anda yakin ingin mengubah status user ini?')) {
+      alert('Fitur toggle status akan diimplementasikan');
+    }
+  }
+
+  // ─── HAPUS USER — Dengan Konfirmasi Modal ───
+  // Variabel untuk menyimpan ID user yang akan dihapus
+  let userToDelete = null;
+
+  function confirmDeleteUser(userId, username) {
+    userToDelete = userId;
+    document.getElementById('deleteUserName').textContent = username;
+    $('#deleteUserModal .delete-error-msg').remove();
+    var modal = new bootstrap.Modal(document.getElementById('deleteUserModal'));
+    modal.show();
+  }
+
+  function deleteUser() {
+    if (!userToDelete) return;
+    var btn = document.getElementById('confirmDeleteBtn');
+    var originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menghapus...';
+    $('#deleteUserModal .delete-error-msg').remove();
+    var csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    $.ajax({
+        url: '/users/delete/' + userToDelete + '/',
+        type: 'POST',
+        headers: {'X-CSRFToken': csrftoken},
+        success: function(response) {
+            if (response.success) {
+                $('#deleteUserModal').modal('hide');
+                location.reload();
+            } else {
+                $('#deleteUserModal .modal-body').append('<div class="delete-error-msg alert alert-danger d-flex align-items-start mt-3 mb-0" role="alert"><i class="ri-error-warning-line me-2 fs-5"></i><div>' + (response.message || 'Gagal menghapus data.') + '</div></div>');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        },
+        error: function(xhr) {
+            var msg = 'Terjadi kesalahan pada server. Silakan coba lagi.';
+            try { var r = JSON.parse(xhr.responseText); msg = r.message || msg; } catch(e) {}
+            $('#deleteUserModal .modal-body').append('<div class="delete-error-msg alert alert-danger d-flex align-items-start mt-3 mb-0" role="alert"><i class="ri-error-warning-line me-2 fs-5"></i><div>' + msg + '</div></div>');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    });
+  }
+
+  // ─── SHOW TOAST — Notifikasi Pop-up via Bootstrap Toast ───
+  // Membuat dan menampilkan notifikasi toast Bootstrap secara dinamis.
+  // Toast = notifikasi kecil yang muncul di pojok halaman.
+  // Parameter:
+  //   type (string) — 'success' atau 'danger'
+  //   message (string) — Pesan yang ditampilkan
+  function showToast(type, message) {
+    // Buat HTML toast secara dinamis
+    const toastHtml = `
+      <div class="bs-toast toast toast-placement-ex m-2 bg-${type} top-0 end-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+          <i class="ri-${type === 'success' ? 'check-line' : 'error-warning-line'} me-2"></i>
+          <div class="me-auto fw-semibold">${type === 'success' ? 'Sukses' : 'Error'}</div>
+          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body">${message}</div>
+      </div>
+    `;
+
+    // Sisipkan toast ke dalam DOM dan tampilkan
+    const toastContainer = document.createElement('div');
+    toastContainer.innerHTML = toastHtml;
+    document.body.appendChild(toastContainer);
+
+    const toastElement = toastContainer.querySelector('.toast');
+    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });  // Auto-tutup 3 detik
+    toast.show();
+
+    // Hapus elemen dari DOM setelah toast tertutup (bersih-bersih)
+    toastElement.addEventListener('hidden.bs.toast', () => {
+      toastContainer.remove();
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // FUNGSI FILTER DASHBOARD — Filter Tanggal
+  // ═══════════════════════════════════════════════════════════════
+
+  // Terapkan filter tanggal — redirect dengan query string
+  // Contoh URL hasil: /?start_date=2024-01-01&end_date=2024-01-31
+  function applyDashFilter() {
+    const startDate = document.getElementById('dashStartDate').value;
+    const endDate = document.getElementById('dashEndDate').value;
+    const params = new URLSearchParams();  // Helper untuk membuat query string
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const qs = params.toString();
+    window.location.href = '/' + (qs ? '?' + qs : '');  // Redirect ke dashboard dengan filter
+  }
+
+  // Reset filter — kembali ke dashboard tanpa filter
+  function resetDashFilter() {
+    window.location.href = '/';
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // JAM REALTIME — Update setiap detik
+  // ═══════════════════════════════════════════════════════════════
+  // Menampilkan jam digital realtime dengan format HH:MM:SS + zona waktu Indonesia
+  // Zona waktu ditentukan dari offset: -420=WIB, -480=WITA, -540=WIT
+  function updateDashClock() {
+    const el = document.getElementById('dashRealtimeClock');
+    if (!el) return;
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');    // Jam (2 digit)
+    const m = String(now.getMinutes()).padStart(2, '0');  // Menit (2 digit)
+    // Deteksi zona waktu Indonesia berdasarkan timezone offset
+    const tz = now.getTimezoneOffset();
+    let tzLabel = 'WIB';                   // Default: Waktu Indonesia Barat
+    if (tz === -480) tzLabel = 'WITA';     // Waktu Indonesia Tengah
+    else if (tz === -540) tzLabel = 'WIT'; // Waktu Indonesia Timur
+    el.textContent = h + ':' + m + ' ' + tzLabel;
+  }
+  setInterval(updateDashClock, 1000);  // Update setiap 1 detik (1000ms)
+  document.addEventListener('DOMContentLoaded', updateDashClock);  // Jalankan pertama kali
+
+  // ═══════════════════════════════════════════════════════════════
+  // DETEKSI LOKASI via Geolocation API + OpenStreetMap Nominatim
+  // ═══════════════════════════════════════════════════════════════
+  // Alur: Browser minta izin lokasi → dapat koordinat GPS →
+  //       kirim ke Nominatim API → dapat nama kota → tampilkan
+  // Fallback: "Indonesia" jika user menolak atau terjadi error
+  document.addEventListener('DOMContentLoaded', function() {
+    const locEl = document.getElementById('dashLocation');
+    if (!locEl) return;
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        // Reverse geocoding: koordinat → nama tempat
+        fetch('https://nominatim.openstreetmap.org/reverse?lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude + '&format=json&accept-language=id')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            // Coba ambil nama kota/kabupaten dari respons Nominatim
+            var city = data.address.city || data.address.town || data.address.village || data.address.county || '';
+            var state = data.address.state || '';
+            locEl.textContent = city + (state ? ', ' + state : '');
+          })
+          .catch(function() { locEl.textContent = 'Indonesia'; });  // Fallback jika API error
+      }, function() {
+        locEl.textContent = 'Indonesia';  // Fallback jika user menolak izin lokasi
+      });
+    } else {
+      locEl.textContent = 'Indonesia';  // Fallback jika browser tidak support geolocation
+    }
+  });
+
+  // ─── DETEKSI IP ADDRESS via ipify API ───
+  // Mengambil IP publik pengguna dan menampilkannya di bar filter
+  document.addEventListener('DOMContentLoaded', function() {
+    var ipEl = document.getElementById('dashDeviceIP');
+    if (!ipEl) return;
+    fetch('https://api.ipify.org?format=json')
+      .then(function(r) { return r.json(); })
+      .then(function(data) { ipEl.textContent = data.ip; })  // Tampilkan IP
+      .catch(function() { ipEl.textContent = '-'; });         // Fallback jika gagal
+  });
+
+  // ─── INISIALISASI BOOTSTRAP TOOLTIPS ───
+  // ─── GRAFIK BESAR: PENJUALAN PER CABANG (Wave/Area Chart) ───
+  // Smooth area chart menampilkan tren penjualan per cabang per bulan
+  document.addEventListener('DOMContentLoaded', function() {
+    var chartEl = document.getElementById('salesPerCabangChart');
+    if (!chartEl) return;
+
+    var labelsEl = document.getElementById('sales-cabang-labels');
+    var seriesEl = document.getElementById('sales-cabang-series');
+    if (!labelsEl || !seriesEl) return;
+
+    var labels = JSON.parse(labelsEl.textContent);
+    var series = JSON.parse(seriesEl.textContent);
+
+    // Palet warna modern — sesuai Materialize & dark mode
+    var chartColors = [
+      '#7367f0', // primary — ungu
+      '#28c76f', // success — hijau
+      '#ff9f43', // warning — oranye
+      '#ea5455', // danger — merah
+      '#00cfe8', // info — cyan
+      '#a855f7', // violet
+      '#f472b6', // pink
+    ];
+
+    var options = {
+      chart: {
+        type: 'area',
+        height: 380,
+        fontFamily: 'Inter, -apple-system, sans-serif',
+        background: 'transparent',
+        toolbar: {
+          show: true,
+          tools: {
+            download: '<i class="ri-download-2-line" style="font-size:16px"></i>',
+            selection: false,
+            zoom: false,
+            zoomin: false,
+            zoomout: false,
+            pan: false,
+            reset: false
+          }
+        },
+        animations: {
+          enabled: true,
+          easing: 'easeinout',
+          speed: 800,
+          dynamicAnimation: { enabled: true, speed: 350 }
+        },
+        dropShadow: {
+          enabled: true,
+          top: 6,
+          left: 0,
+          blur: 6,
+          opacity: isDarkStyle ? 0.15 : 0.08,
+          color: chartColors.slice(0, series.length)
+        }
+      },
+      colors: chartColors.slice(0, series.length),
+      dataLabels: { enabled: false },
+      stroke: {
+        curve: 'smooth',
+        width: 3,
+        lineCap: 'round'
+      },
+      fill: {
+        type: 'gradient',
+        gradient: {
+          shade: isDarkStyle ? 'dark' : 'light',
+          type: 'vertical',
+          shadeIntensity: 0.3,
+          opacityFrom: isDarkStyle ? 0.25 : 0.4,
+          opacityTo: 0.02,
+          stops: [0, 95, 100]
+        }
+      },
+      series: series,
+      xaxis: {
+        categories: labels,
+        labels: {
+          style: {
+            colors: isDarkStyle ? '#b4b5ba' : '#a5a3ae',
+            fontSize: '13px',
+            fontWeight: 400
+          }
+        },
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+        crosshairs: {
+          stroke: {
+            color: isDarkStyle ? '#555' : '#ddd',
+            dashArray: 4
+          }
+        }
+      },
+      yaxis: {
+        labels: {
+          style: {
+            colors: isDarkStyle ? '#b4b5ba' : '#a5a3ae',
+            fontSize: '13px'
+          },
+          formatter: function(val) {
+            if (val >= 1000000000) return 'Rp ' + (val / 1000000000).toFixed(1) + 'M';
+            if (val >= 1000000) return 'Rp ' + (val / 1000000).toFixed(1) + 'Jt';
+            if (val >= 1000) return 'Rp ' + (val / 1000).toFixed(0) + 'Rb';
+            return 'Rp ' + val.toFixed(0);
+          }
+        }
+      },
+      tooltip: {
+        theme: isDarkStyle ? 'dark' : 'light',
+        shared: true,
+        intersect: false,
+        style: { fontSize: '13px' },
+        x: { show: true },
+        y: {
+          formatter: function(val) {
+            return 'Rp ' + val.toLocaleString('id-ID');
+          }
+        },
+        marker: { show: true }
+      },
+      legend: {
+        position: 'top',
+        horizontalAlign: 'left',
+        fontSize: '13px',
+        fontWeight: 500,
+        labels: { colors: isDarkStyle ? '#ccc' : '#555' },
+        markers: {
+          size: 5,
+          shape: 'circle',
+          strokeWidth: 0,
+          offsetX: -3
+        },
+        itemMargin: { horizontal: 12, vertical: 4 }
+      },
+      markers: {
+        size: 0,
+        hover: { size: 6, sizeOffset: 3 },
+        strokeWidth: 2,
+        strokeColors: isDarkStyle ? '#2b2c40' : '#fff'
+      },
+      grid: {
+        borderColor: isDarkStyle ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+        strokeDashArray: 4,
+        padding: { top: -10, left: 10, right: 10, bottom: 0 },
+        xaxis: { lines: { show: false } },
+        yaxis: { lines: { show: true } }
+      },
+      responsive: [
+        {
+          breakpoint: 768,
+          options: {
+            chart: { height: 280 },
+            legend: { fontSize: '11px' },
+            stroke: { width: 2 }
+          }
+        }
+      ]
+    };
+
+    var chart = new ApexCharts(chartEl, options);
+    chart.render();
+  });
+  // Aktifkan semua tooltip di halaman (elemen dengan data-bs-toggle="tooltip")
+  document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function(el) {
+      return new bootstrap.Tooltip(el);
+    });
+  });
+</script>
+{% endblock page_js %}
+
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# KONTEN UTAMA DASHBOARD                                              #}
+{# Layout: 2-column grid responsive dengan card-card komponen           #}
+{# ══════════════════════════════════════════════════════════════════════ #}
+{% block content %}
+{# Filter waktu sudah dipindahkan ke icon di navbar #}
+
+
+
+
+
+
+<div class="row g-6 mb-6">
+  <!-- ROW 1: Ringkasan Penjualan + Estimasi + Profit + Slider + Chart Sparkline -->
+  <!-- Ringkasan Penjualan (Sales Overview) -->
+  <!-- Card 3 kolom: Total Aset, Total Harga Beli, Total Harga Jual -->
+  <!-- Data dari: sales_overview context variable -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        <div class="d-flex justify-content-between">
+          <h5 class="mb-1">Ringkasan Penjualan</h5>
+          <div class="dropdown">
+            <button class="btn btn-text-secondary rounded-pill text-muted border-0 p-1" type="button"
+              data-bs-toggle="dropdown">
+              <i class="ri-more-2-line ri-20px"></i>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end">
+              <a class="dropdown-item" href="javascript:window.location.reload();"><i class="ri-loop-left-line me-2"></i>Refresh Data</a>
+              <a class="dropdown-item" href="{% url 'laporan:keuangan' %}"><i class="ri-file-chart-line me-2"></i>Lihat Laporan</a>
+              <a class="dropdown-item" href="{% url 'penjualan:sales-order' %}"><i class="ri-shopping-cart-line me-2"></i>Lihat Penjualan</a>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex align-items-center card-subtitle">
+          <div class="me-2">Total {{ sales_overview.total_sales }} Penjualan</div>
+          <div class="d-flex align-items-center text-success">
+            <p class="mb-0 fw-medium">+{{ sales_overview.growth }}%</p>
+            <i class="ri-arrow-up-s-line ri-20px"></i>
+          </div>
+        </div>
+      </div>
+      <div class="card-body d-flex justify-content-between flex-wrap gap-4">
+        <div class="d-flex align-items-center gap-3">
+          <div class="avatar">
+            <div class="avatar-initial bg-label-primary rounded">
+              <i class="ri-safe-2-line ri-24px"></i>
+            </div>
+          </div>
+          <div class="card-info">
+            <h5 class="mb-0" data-bs-toggle="tooltip" data-bs-placement="top" title="Total harga beli × (stok saat ini + qty terjual) dari semua produk yang pernah masuk ke sistem">{{ sales_overview.total_keseluruhan_aset|rupiah }}</h5>
+            <p class="mb-0">Total Aset</p>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <div class="avatar">
+            <div class="avatar-initial bg-label-danger rounded">
+              <i class="ri-shopping-cart-2-line ri-24px"></i>
+            </div>
+          </div>
+          <div class="card-info">
+            <h5 class="mb-0" data-bs-toggle="tooltip" data-bs-placement="top" title="Total harga beli × stok dari produk yang masih tersedia (stok > 0)">{{ sales_overview.total_harga_beli|rupiah }}</h5>
+            <p class="mb-0">Total Harga Beli</p>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <div class="avatar">
+            <div class="avatar-initial bg-label-success rounded">
+              <i class="ri-price-tag-3-line ri-24px"></i>
+            </div>
+          </div>
+          <div class="card-info">
+            <h5 class="mb-0" data-bs-toggle="tooltip" data-bs-placement="top" title="Total harga jual × stok dari produk yang masih tersedia (stok > 0)">{{ sales_overview.total_harga_jual|rupiah }}</h5>
+            <p class="mb-0">Total Harga Jual</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!--/ Sales Overview-->
+
+  <!-- Estimasi Keuntungan -->
+  <div class="col-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body position-relative">
+        <div class="card-info mb-3">
+          <h6 class="mb-2 text-nowrap">Total Keuntungan</h6>
+          <div class="badge {% if sales_overview.estimasi_keuntungan >= 0 %}bg-label-success{% else %}bg-label-danger{% endif %} rounded-pill lh-xs">
+            {% if sales_overview.estimasi_keuntungan >= 0 %}Estimasi Keuntungan{% else %}Loss{% endif %}
+          </div>
+        </div>
+        <div class="d-flex align-items-center flex-wrap gap-2">
+          <h4 class="mb-0" data-bs-toggle="tooltip" data-bs-placement="top" title="Selisih antara Total Harga Jual dan Total Harga Beli dari produk yang masih ready (stok > 0)">{{ sales_overview.estimasi_keuntungan|rupiah }}</h4>
+        </div>
+        <small class="{% if sales_overview.estimasi_keuntungan >= 0 %}text-success{% else %}text-danger{% endif %} fw-medium mt-1 d-block">Produk ready (stok > 0)</small>
+        <div class="position-absolute" style="top: 1.5rem; right: 1.5rem;">
+          <div class="avatar">
+            <div class="avatar-initial {% if sales_overview.estimasi_keuntungan >= 0 %}bg-label-success{% else %}bg-label-danger{% endif %} rounded">
+              <i class="ri-line-chart-line ri-26px"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!--/ Estimasi Keuntungan -->
+
+  <!-- Keuntungan (Profit) -->
+  <div class="col-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body position-relative">
+        <div class="card-info mb-3">
+          <h6 class="mb-2 text-nowrap">Keuntungan Kotor</h6>
+          <div
+            class="badge {% if profit_data.is_profit %}bg-label-success{% else %}bg-label-danger{% endif %} rounded-pill lh-xs">
+            {% if profit_data.is_profit %}Keuntungan{% else %}Loss{% endif %}</div>
+        </div>
+        <div class="mb-2">
+          <h4 class="mb-0 text-truncate" data-bs-toggle="tooltip" data-bs-placement="top" title="Keuntungan kotor = (Harga Jual − Harga Beli) × Jumlah terjual, dari Sales Order + POS Transaction">{{ profit_data.gross_profit|rupiah }}</h4>
+        </div>
+        <div>
+          <small class="{% if profit_data.is_profit %}text-success{% else %}text-danger{% endif %} fw-medium" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Profit Margin = Keuntungan Kotor ÷ Total Pendapatan × 100%">{% if profit_data.is_profit %}+{% endif %}{{ profit_data.margin_percent }}% margin</small>
+        </div>
+        <div class="position-absolute" style="top: 1.5rem; right: 1.5rem;">
+          <div class="avatar">
+            <div
+              class="avatar-initial {% if profit_data.is_profit %}bg-label-success{% else %}bg-label-danger{% endif %} rounded">
+              <i class="ri-money-dollar-circle-line ri-26px"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!--/ Keuntungan -->
+
+  <!-- Weekly Sales with bg-->
+  <div class="col-lg-6">
+    <div class="swiper-container swiper-container-horizontal swiper text-bg-primary h-100"
+      id="swiper-weekly-sales-with-bg">
+      <div class="swiper-wrapper">
+        {% for week_data in weekly_sales_data %}
+        <div class="swiper-slide pb-5">
+          <div class="row">
+            <div class="col-12">
+              <h5 class="text-white mb-0">{{ week_data.category }}</h5>
+              <div class="d-flex align-items-center gap-2">
+                <div>Total {{ week_data.earning }} Pendapatan</div>
+                <div class="d-flex align-items-center text-success">
+                  <p class="mb-0 fw-medium">{{ week_data.growth }} Trx</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-7 col-md-9 col-12 order-2 order-md-1">
+              <h6 class="text-white mt-0 mt-md-4 mb-4 py-1">{{ week_data.category }}</h6>
+              <div class="row g-2">
+                {% for item in week_data.items %}
+                <div class="col-6">
+                  <div class="d-flex mb-2 align-items-center">
+                    <p class="mb-0 me-2 weekly-sales-text-bg-primary fw-medium">{{ item.count }}</p>
+                    <p class="mb-0 text-truncate" style="font-size: 0.85rem;">{{ item.name }}</p>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="col-lg-5 col-md-3 col-12 order-1 order-md-2 my-2 my-md-0 text-center">
+              {% if week_data.product_image %}
+              <img src="{{ week_data.product_image.url }}" alt="{{ week_data.category }}" width="200"
+                class="weekly-sales-img rounded-3" style="object-fit: cover; max-height: 200px;">
+              {% else %}
+              <img src="{% static 'img/products/card-weekly-sales-phone.png' %}" alt="{{ week_data.category }}"
+                width="200" class="weekly-sales-img">
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="swiper-pagination"></div>
+    </div>
+  </div>
+  <!--/ Weekly Sales with bg-->
+
+  <!-- Total Visits -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="card h-100">
+      <div class="card-header">
+        <div class="d-flex justify-content-between flex-wrap gap-2">
+          <p class="d-block mb-0 text-body">Gudang & Produk</p>
+          <div class="d-flex align-items-center">
+            <div class="avatar">
+              <div class="avatar-initial bg-label-success rounded">
+                <i class="ri-checkbox-circle-line ri-24px"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+        <h4 class="mb-0" data-bs-toggle="tooltip" data-bs-placement="top" title="Jumlah gudang/cabang aktif yang terdaftar dalam sistem">{{ cabang_data.total_gudang }} Gudang</h4>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-5">
+            <div class="d-flex gap-2 align-items-center mb-2">
+              <div class="avatar avatar-xs flex-shrink-0">
+                <div class="avatar-initial rounded bg-label-warning">
+                  <i class="ri-home-8-line ri-16px"></i>
+                </div>
+              </div>
+              <p class="mb-0">Gudang</p>
+            </div>
+            <h4 class="mb-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Jumlah gudang/cabang yang aktif">{{ cabang_data.total_gudang }}</h4>
+          </div>
+          <div class="col-2">
+            <div class="divider divider-vertical">
+              <div class="divider-text">
+                <span class="badge-divider-bg">:</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-5 text-end">
+            <div class="d-flex gap-2 justify-content-end align-items-center mb-2">
+              <p class="mb-0">Produk</p>
+              <div class="avatar avatar-xs flex-shrink-0">
+                <div class="avatar-initial rounded bg-label-primary">
+                  <i class="ri-box-3-line ri-16px"></i>
+                </div>
+              </div>
+            </div>
+            <h4 class="mb-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Total produk aktif yang tersedia di sistem">{{ cabang_data.total_produk }}</h4>
+          </div>
+        </div>
+        <div class="d-flex align-items-center mt-4">
+          <div class="progress w-100 rounded" style="height: 8px;">
+            <div class="progress-bar bg-warning" style="width: {{ cabang_data.gudang_percent }}%" role="progressbar">
+            </div>
+            <div class="progress-bar bg-primary" role="progressbar" style="width: {{ cabang_data.produk_percent }}%">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!--/ Total Visits -->
+
+  <!-- Sales This Months -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="card h-100">
+      <div class="card-body position-relative">
+        <div class="card-info mb-3">
+          <h5 class="mb-2">Bulan Ini</h5>
+          <p class="mb-0">Total Penjualan</p>
+          <h5 class="mb-0" data-bs-toggle="tooltip" data-bs-placement="top" title="Total penjualan bulan ini dari Sales Order + Transaksi POS yang sudah lunas">{{ sales_this_month|rupiah }}</h5>
+        </div>
+        <div class="position-absolute" style="top: 1.5rem; right: 1.5rem;">
+          <div class="avatar">
+            <div class="avatar-initial bg-label-primary rounded">
+              <i class="ri-line-chart-line ri-24px"></i>
+            </div>
+          </div>
+        </div>
+        <div id="saleThisMonthChart"></div>
+      </div>
+    </div>
+  </div>
+  <!--/ Sales This Months -->
+</div>
+
+<!-- ═══ GRAFIK BESAR: PENJUALAN PER CABANG (Wave Chart) ═══ -->
+<div class="row g-6 mb-6">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center pb-0">
+        <div>
+          <h5 class="mb-1"><i class="ri-line-chart-line me-2 text-primary"></i>Penjualan per Cabang</h5>
+          <p class="text-muted mb-0" style="font-size: 0.85rem;">Tren penjualan (SO + POS) per cabang — {% if has_date_filter %}{{ filter_start_date }} s/d {{ filter_end_date }}{% else %}6 bulan terakhir{% endif %}</p>
+        </div>
+        <div class="dropdown">
+          <button class="btn btn-text-secondary rounded-pill text-muted border-0 p-1" type="button" data-bs-toggle="dropdown">
+            <i class="ri-more-2-line ri-20px"></i>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end">
+            <a class="dropdown-item" href="javascript:window.location.reload();"><i class="ri-loop-left-line me-2"></i>Refresh Data</a>
+            <a class="dropdown-item" href="{% url 'laporan:keuangan' %}"><i class="ri-file-chart-line me-2"></i>Lihat Laporan</a>
+          </div>
+        </div>
+      </div>
+      <div class="card-body pt-2">
+        <div id="salesPerCabangChart"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<!--/ Grafik Besar Penjualan per Cabang (Wave Chart) -->
+
+<div class="row g-6 mb-6">
+  <!-- Activity Timeline -->
+  <div class="col-12 col-md-7 col-xl-6 order-md-2 order-xl-0">
+    <div class="card h-100">
+      <div class="card-header">
+        <div class="d-flex justify-content-between">
+          <h5 class="mb-0">Aktivitas Terkini</h5>
+        </div>
+      </div>
+      <div class="card-body pt-4">
+        <ul class="timeline card-timeline mb-0">
+          {% for activity in activity_timeline %}
+          <li class="timeline-item timeline-item-transparent">
+            <span class="timeline-point timeline-point-{{ activity.color }}"></span>
+            <div class="timeline-event">
+              <div class="timeline-header mb-3">
+                <h6 class="mb-0">{{ activity.title }}</h6>
+                <small class="text-muted">{{ activity.time }}</small>
+              </div>
+              <p class="mb-2">{{ activity.desc }}</p>
+              {% if activity.file %}
+              <div class="d-flex align-items-center mb-1">
+                <div class="badge bg-lighter rounded-3">
+                  <img src="{% static 'img/icons/misc/pdf.png' %}" alt="img" width="15" class="me-2">
+                  <span class="h6 mb-0 text-body">{{ activity.file }}</span>
+                </div>
+              </div>
+              {% endif %}
+              {% if activity.users %}
+              <div class="d-flex justify-content-between flex-wrap gap-2">
+                <div class="d-flex flex-wrap align-items-center">
+                  <ul class="list-unstyled users-list d-flex align-items-center avatar-group m-0">
+                    {% for user_img in activity.users %}
+                    <li class="avatar pull-up">
+                      <img class="rounded-circle" src="{% static 'img/avatars/'|add:user_img %}" alt="Avatar" />
+                    </li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  <!--/ Activity Timeline -->
+
+  <!-- Top Products Table -->
+  <div class="col-12 col-md-5 col-xl-6 order-md-1 order-xl-0">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between">
+        <h5 class="mb-0">Produk Terlaris</h5>
+        <div class="dropdown">
+          <button class="btn btn-text-secondary rounded-pill text-muted border-0 p-1" type="button"
+            data-bs-toggle="dropdown">
+            <i class="ri-more-2-line ri-20px"></i>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end">
+            <a class="dropdown-item" href="{% url 'produk:list' %}">Lihat Semua Produk</a>
+            <a class="dropdown-item" href="javascript:window.location.reload();"><i class="ri-loop-left-line me-2"></i>Refresh Data</a>
+          </div>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-borderless">
+          <thead>
+            <tr>
+              <th>Produk</th>
+              <th>Status</th>
+              <th>Revenue</th>
+              <th>Profit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for product in top_products %}
+            <tr>
+              <td>
+                <div class="d-flex align-items-center">
+                  <div class="avatar avatar-sm me-3">
+                    {% if product.image %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="rounded">
+                    {% else %}
+                    <span class="avatar-initial rounded bg-label-primary">
+                      <i class="ri-product-hunt-line ri-20px"></i>
+                    </span>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <h6 class="mb-0 text-truncate" style="max-width: 150px;">{{ product.name }}</h6>
+                    <small class="text-muted">{{ product.sku }}</small>
+                  </div>
+                </div>
+              </td>
+              <td><span class="badge bg-label-{{ product.status_class }}">{{ product.status }}</span></td>
+              <td>
+                <div>
+                  <p class="mb-0 fw-medium">{{ product.revenue|rupiah }}</p>
+                  <small class="text-muted">{{ product.qty_sold }} terjual</small>
+                </div>
+              </td>
+              <td>
+                <div class="d-flex align-items-center">
+                  <p class="mb-0 {% if product.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    {% if product.profit >= 0 %}+{% endif %}{{ product.profit_percentage }}%
+                  </p>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="text-center py-4">
+                <p class="text-muted mb-0">Belum ada data penjualan produk</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <!--/ Top Products Table -->
+
+
+
+
+
+  <!-- User Table (Replaces Roles Datatable) -->
+  <div class="col-12">
+    <div class="card h-100">
+      <div class="card-header">
+        <h5 class="mb-0">Pengguna Terbaru</h5>
+      </div>
+      <div class="table-responsive rounded-3">
+        <table class="table table-hover table-border-bottom-0">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in latest_users %}
+            <tr>
+              <td>
+                <div class="d-flex align-items-center">
+                  <div class="avatar avatar-sm me-3">
+                    <span class="avatar-initial rounded-circle bg-label-primary">{{ user.username|slice:":1"|upper }}</span>
+                  </div>
+                  <div>
+                    <span class="fw-medium d-block">{{ user.username }}</span>
+                    <small class="text-muted">@{{ user.username|lower }}</small>
+                  </div>
+                </div>
+              </td>
+              <td><span class="text-truncate d-block" style="max-width: 200px;">{{ user.email }}</span></td>
+              <td>
+                <div class="d-flex align-items-center">
+                  <i class="{{ user.role_icon }} ri-18px text-{{ user.role_color }} me-2"></i>
+                  <span>{{ user.role }}</span>
+                </div>
+              </td>
+              <td><span class="badge rounded-pill bg-label-{{ user.status_class }}">{{ user.status }}</span></td>
+              <td>
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-icon btn-text-secondary" data-bs-toggle="dropdown">
+                    <i class="ri-more-2-line"></i>
+                  </button>
+                  <div class="dropdown-menu dropdown-menu-end">
+                    <a class="dropdown-item" href="{% url 'user_management:user_detail' user.id %}"><i
+                        class="ri-eye-line me-2"></i>Detail User</a>
+                    <a class="dropdown-item" href="{% url 'user_management:user_edit' user.id %}"><i
+                        class="ri-edit-line me-2"></i>Edit User</a>
+                    <a class="dropdown-item" href="#" onclick="toggleUserStatus({{ user.id }})"><i
+                        class="ri-toggle-line me-2"></i>Toggle Status</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item text-danger" href="#"
+                      onclick="confirmDeleteUser({{ user.id }}, '{{ user.username }}'); return false;"><i
+                        class="ri-delete-bin-line me-2"></i>Hapus User</a>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="text-center py-4">
+                <p class="text-muted mb-0">Belum ada pengguna</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <!--/ Roles Datatables -->
+</div>
+
+<!-- Delete User Modal -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-label-danger">
+        <h5 class="modal-title text-danger">
+          <i class="ri-alert-line me-2"></i>Konfirmasi Hapus User
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-flex align-items-start" role="alert">
+          <i class="ri-error-warning-line ri-22px me-2"></i>
+          <div>
+            <h6 class="alert-heading mb-1">Peringatan!</h6>
+            <span>Tindakan ini akan menghapus user secara permanen dan <strong>tidak dapat dibatalkan</strong>.</span>
+          </div>
+        </div>
+        <div class="card bg-lighter mb-3">
+          <div class="card-body">
+            <div class="d-flex align-items-center">
+              <div class="avatar avatar-md me-3">
+                <span class="avatar-initial rounded bg-label-primary">
+                  <i class="ri-user-line ri-24px"></i>
+                </span>
+              </div>
+              <div>
+                <h6 class="mb-0" id="deleteUserName"></h6>
+                <small class="text-muted">User akan dihapus secara permanen</small>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mb-2">Apakah Anda yakin ingin menghapus user ini?</p>
+        <p class="text-muted small mb-0">
+          <i class="ri-information-line me-1"></i>
+          Semua data dan riwayat yang terkait dengan user ini akan dihapus.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">
+          <i class="ri-close-line me-1"></i>Batal
+        </button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="deleteUser()">
+          <i class="ri-delete-bin-line me-1"></i>Ya, Hapus User
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}

@@ -1,0 +1,453 @@
+{% extends layout_path %}
+{% comment %}
+==========================================================================
+FRAUD DETECTION - Detail Anomali + Aksi Konfirmasi (Enhanced)
+==========================================================================
+Halaman detail yang menampilkan informasi lengkap satu anomali:
+- Informasi Anomali (jenis, severity, user, nominal, tanggal, status, deskripsi)
+- Data Referensi (model/modul, ID objek)
+- Snapshot Data Before/After (JSON)
+- Riwayat Aktivitas User Terkait (20 terbaru)
+- Sidebar: Aksi Tindak Lanjut (Aman, Investigasi, Fraud) dengan Modal Konfirmasi
+- Sidebar: Timeline Review (siapa review, kapan, catatan)
+
+Terhubung dengan:
+- apps/fraud_detection/views.py → FraudAlertDetailView
+- apps/fraud_detection/views.py → fraud_alert_update_status (AJAX POST)
+==========================================================================
+{% endcomment %}
+{% load static %}
+{% load currency_filters %}
+
+{% block title %}Detail Anomali #{{ alert.pk }} - Fraud Detection{% endblock title %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    {# ─── HEADER HALAMAN ─── #}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="ri-shield-keyhole-line me-2"></i>Detail Anomali #{{ alert.pk }}</h4>
+            <p class="text-muted mb-0">Informasi lengkap anomali yang terdeteksi oleh sistem</p>
+        </div>
+        <a href="{% url 'fraud_detection:alert_list' %}" class="btn btn-label-secondary">
+            <i class="ri-arrow-left-line me-1"></i>Kembali ke Daftar
+        </a>
+    </div>
+
+    {# ─── SUMMARY BADGES ─── #}
+    {# Baris badge cepat untuk melihat jenis, severity, status dalam 1 baris #}
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        {# Badge Jenis Anomali #}
+        {% if alert.jenis == 'hapus_lunas' %}
+        <span class="badge bg-label-danger px-3 py-2"><i class="ri-delete-bin-line me-1"></i>{{ alert.get_jenis_display }}</span>
+        {% elif alert.jenis == 'diskon_besar' %}
+        <span class="badge bg-label-warning px-3 py-2"><i class="ri-percent-line me-1"></i>{{ alert.get_jenis_display }}</span>
+        {% elif alert.jenis == 'po_markup' %}
+        <span class="badge bg-label-info px-3 py-2"><i class="ri-price-tag-3-line me-1"></i>{{ alert.get_jenis_display }}</span>
+        {% elif alert.jenis == 'diluar_jam' %}
+        <span class="badge bg-label-dark px-3 py-2"><i class="ri-time-line me-1"></i>{{ alert.get_jenis_display }}</span>
+        {% else %}
+        <span class="badge bg-label-secondary px-3 py-2"><i class="ri-error-warning-line me-1"></i>{{ alert.get_jenis_display }}</span>
+        {% endif %}
+
+        {# Badge Severity #}
+        {% if alert.severity == 'critical' %}
+        <span class="badge bg-danger px-3 py-2"><i class="ri-fire-line me-1"></i>{{ alert.get_severity_display }}</span>
+        {% elif alert.severity == 'high' %}
+        <span class="badge bg-label-danger px-3 py-2"><i class="ri-arrow-up-line me-1"></i>{{ alert.get_severity_display }}</span>
+        {% elif alert.severity == 'medium' %}
+        <span class="badge bg-label-warning px-3 py-2"><i class="ri-subtract-line me-1"></i>{{ alert.get_severity_display }}</span>
+        {% else %}
+        <span class="badge bg-label-info px-3 py-2"><i class="ri-arrow-down-line me-1"></i>{{ alert.get_severity_display }}</span>
+        {% endif %}
+
+        {# Badge Status #}
+        {% if alert.status == 'pending' %}
+        <span class="badge bg-label-warning px-3 py-2"><i class="ri-time-line me-1"></i>{{ alert.get_status_display }}</span>
+        {% elif alert.status == 'investigated' %}
+        <span class="badge bg-label-info px-3 py-2"><i class="ri-search-eye-line me-1"></i>{{ alert.get_status_display }}</span>
+        {% elif alert.status == 'cleared' %}
+        <span class="badge bg-label-success px-3 py-2"><i class="ri-check-double-line me-1"></i>{{ alert.get_status_display }}</span>
+        {% elif alert.status == 'rejected' %}
+        <span class="badge bg-label-danger px-3 py-2"><i class="ri-close-circle-line me-1"></i>{{ alert.get_status_display }}</span>
+        {% endif %}
+
+        {# Badge Nominal #}
+        <span class="badge bg-danger px-3 py-2"><i class="ri-money-dollar-circle-line me-1"></i>{{ alert.nominal|rupiah }}</span>
+    </div>
+
+    <div class="row g-4">
+        {# ═══ KOLOM KIRI: Informasi Detail ═══ #}
+        <div class="col-lg-8">
+            {# ─── CARD: INFORMASI ANOMALI ─── #}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-information-line me-2"></i>Informasi Anomali</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        {# Baris 1: Jenis + Severity #}
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small text-uppercase">Jenis Anomali</label>
+                            <p class="fw-semibold mb-0">
+                                {% if alert.jenis == 'hapus_lunas' %}
+                                <span class="badge bg-label-danger">{{ alert.get_jenis_display }}</span>
+                                {% elif alert.jenis == 'diskon_besar' %}
+                                <span class="badge bg-label-warning">{{ alert.get_jenis_display }}</span>
+                                {% elif alert.jenis == 'po_markup' %}
+                                <span class="badge bg-label-info">{{ alert.get_jenis_display }}</span>
+                                {% elif alert.jenis == 'diluar_jam' %}
+                                <span class="badge bg-label-dark">{{ alert.get_jenis_display }}</span>
+                                {% else %}
+                                <span class="badge bg-label-secondary">{{ alert.get_jenis_display }}</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small text-uppercase">Tingkat Keparahan</label>
+                            <p class="mb-0">
+                                {% if alert.severity == 'critical' %}
+                                <span class="badge bg-danger">{{ alert.get_severity_display }}</span>
+                                {% elif alert.severity == 'high' %}
+                                <span class="badge bg-label-danger">{{ alert.get_severity_display }}</span>
+                                {% elif alert.severity == 'medium' %}
+                                <span class="badge bg-label-warning">{{ alert.get_severity_display }}</span>
+                                {% else %}
+                                <span class="badge bg-label-info">{{ alert.get_severity_display }}</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        {# Baris 2: User + Nominal #}
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small text-uppercase">User Terkait</label>
+                            <p class="fw-semibold mb-0">
+                                {% if alert.user_terkait %}
+                                <i class="ri-user-line me-1 text-primary"></i>{{ alert.user_terkait.get_full_name|default:alert.user_terkait.username }}
+                                {% else %}<span class="text-muted">-</span>{% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small text-uppercase">Nominal Terkait</label>
+                            <p class="fw-bold text-danger mb-0" style="font-size: 1.1rem;">{{ alert.nominal|rupiah }}</p>
+                        </div>
+                        {# Baris 3: Tanggal + Status #}
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small text-uppercase">Tanggal Terdeteksi</label>
+                            <p class="mb-0"><i class="ri-calendar-line me-1 text-muted"></i>{{ alert.created_at|date:"d M Y H:i:s" }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small text-uppercase">Status Saat Ini</label>
+                            <p class="mb-0">
+                                {% if alert.status == 'pending' %}
+                                <span class="badge bg-label-warning">{{ alert.get_status_display }}</span>
+                                {% elif alert.status == 'investigated' %}
+                                <span class="badge bg-label-info">{{ alert.get_status_display }}</span>
+                                {% elif alert.status == 'cleared' %}
+                                <span class="badge bg-label-success">{{ alert.get_status_display }}</span>
+                                {% elif alert.status == 'rejected' %}
+                                <span class="badge bg-label-danger">{{ alert.get_status_display }}</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        {# Baris 4: Deskripsi (full width) #}
+                        <div class="col-12">
+                            <label class="form-label text-muted small text-uppercase">Deskripsi Lengkap</label>
+                            <div class="bg-lighter rounded p-3">
+                                <p class="mb-0" style="line-height: 1.6;">{{ alert.deskripsi }}</p>
+                            </div>
+                        </div>
+                        {# Baris 5: Referensi Model/Objek (opsional) #}
+                        {% if alert.model_name or alert.object_id %}
+                        <div class="col-12">
+                            <hr class="my-1">
+                        </div>
+                        {% endif %}
+                        {% if alert.model_name %}
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small text-uppercase">Model / Modul</label>
+                            <p class="mb-0"><code class="text-primary">{{ alert.model_name }}</code></p>
+                        </div>
+                        {% endif %}
+                        {% if alert.object_id %}
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small text-uppercase">ID Objek</label>
+                            <p class="mb-0"><code class="text-primary">{{ alert.object_id }}</code></p>
+                        </div>
+                        
+                        {# NEW REALTIME DATALINK #}
+                        <div class="col-12 mt-3">
+                            {% if related_object_pos %}
+                                <a href="{% url 'pos:invoice_detail' related_object_pos.id %}" class="btn btn-sm btn-outline-primary" target="_blank"><i class="ri-external-link-line me-1"></i>Lihat Data POS Terkait (Realtime)</a>
+                            {% elif related_object_so %}
+                                <a href="{% url 'penjualan:sales-order-detail' related_object_so.id %}" class="btn btn-sm btn-outline-primary" target="_blank"><i class="ri-external-link-line me-1"></i>Lihat Data SO Terkait (Realtime)</a>
+                            {% elif related_object_po %}
+                                <a href="{% url 'pembelian:purchase-order-detail' related_object_po.id %}" class="btn btn-sm btn-outline-primary" target="_blank"><i class="ri-external-link-line me-1"></i>Lihat Data PO Terkait (Realtime)</a>
+                            {% elif related_object_cash %}
+                                <a href="{% url 'fraud_detection:cash_list' %}" class="btn btn-sm btn-outline-primary" target="_blank"><i class="ri-external-link-line me-1"></i>Lihat Rekonsiliasi Terkait (Realtime)</a>
+                            {% else %}
+                                <span class="text-muted small"><i class="ri-alert-line me-1"></i>Data terkait mungkin sudah terhapus atau ID tidak valid.</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# ─── CARD: DATA SNAPSHOT (Before/After) ─── #}
+            {% if snapshot_pretty %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-code-s-slash-line me-2"></i>Snapshot Data (Before / After)</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-dark text-light p-3 rounded" style="max-height:400px; overflow:auto; font-size:0.85rem;">{{ snapshot_pretty }}</pre>
+                </div>
+            </div>
+            {% endif %}
+
+            {# ─── CARD: RIWAYAT AKTIVITAS USER ─── #}
+            {% if user_activities %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-history-line me-2"></i>Riwayat Aktivitas User Terkait (20 Terbaru)</h5>
+                </div>
+                <div class="card-datatable table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead>
+                            <tr>
+                                <th>Waktu</th>
+                                <th>Aksi</th>
+                                <th>Model</th>
+                                <th>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for act in user_activities %}
+                            <tr>
+                                <td><small>{{ act.timestamp|date:"d/m/Y H:i" }}</small></td>
+                                <td><span class="badge bg-label-secondary">{{ act.get_action_display }}</span></td>
+                                <td><code>{{ act.model_name|default:"-" }}</code></td>
+                                <td><small>{{ act.description|truncatechars:80|default:"-" }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ═══ KOLOM KANAN: Sidebar Aksi & Review ═══ #}
+        <div class="col-lg-4">
+            {# ─── CARD: TINDAK LANJUT — hanya muncul jika pending/investigated ─── #}
+            {% if alert.status == 'pending' or alert.status == 'investigated' %}
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0 text-white"><i class="ri-tools-line me-2"></i>Tindak Lanjut</h5>
+                </div>
+                {# Diberi pt-4 agar ada jarak antara header "Tindak Lanjut" dan "Catatan Owner/SPV" #}
+                <div class="card-body pt-4">
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Catatan Owner/SPV</label>
+                        <textarea class="form-control" id="catatanReview" rows="4" placeholder="Masukkan catatan investigasi...">{{ alert.catatan_owner|default:"" }}</textarea>
+                        <div class="form-text">Tambahkan catatan untuk dokumentasi audit.</div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        {# Tombol aksi — masing-masing membuka modal konfirmasi #}
+                        <button class="btn btn-success" onclick="openActionModal('cleared')">
+                            <i class="ri-check-double-line me-1"></i>Tandai Aman / Wajar
+                        </button>
+                        <button class="btn btn-info" onclick="openActionModal('investigated')">
+                            <i class="ri-search-eye-line me-1"></i>Sedang Diinvestigasi
+                        </button>
+                        <button class="btn btn-danger" onclick="openActionModal('rejected')">
+                            <i class="ri-close-circle-line me-1"></i>Terbukti Fraud
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# ─── CARD: INFO REVIEW — muncul jika sudah di-review ─── #}
+            {% if alert.reviewed_by %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-user-star-line me-2"></i>Info Review</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="avatar">
+                            <span class="avatar-initial rounded bg-label-primary">
+                                <i class="ri-user-line ri-20px"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="d-block fw-semibold">{{ alert.reviewed_by.get_full_name|default:alert.reviewed_by.username }}</span>
+                            <small class="text-muted">{{ alert.reviewed_at|date:"d M Y H:i" }}</small>
+                        </div>
+                    </div>
+                    {% if alert.catatan_owner %}
+                    <div class="mt-3">
+                        <label class="form-label text-muted small text-uppercase">Catatan</label>
+                        <div class="bg-lighter p-3 rounded">
+                            <p class="mb-0">{{ alert.catatan_owner }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# ─── CARD: INFORMASI SISTEM ─── #}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-database-2-line me-2"></i>Informasi Sistem</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <small class="text-muted d-block">ID Anomali</small>
+                            <span class="fw-semibold">#{{ alert.pk }}</span>
+                        </li>
+                        <li class="mb-2">
+                            <small class="text-muted d-block">Dibuat</small>
+                            <span>{{ alert.created_at|date:"d M Y H:i:s" }}</span>
+                        </li>
+                        <li class="mb-2">
+                            <small class="text-muted d-block">Terakhir Update</small>
+                            <span>{{ alert.updated_at|date:"d M Y H:i:s" }}</span>
+                        </li>
+                        {% if alert.activity %}
+                        <li>
+                            <small class="text-muted d-block">Activity Log ID</small>
+                            <code>#{{ alert.activity.pk }}</code>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ═══ MODAL KONFIRMASI AKSI — Pop up untuk setiap tindak lanjut ═══ #}
+{# Modal yang sama seperti di alert_list.html, konsisten dan profesional #}
+<div class="modal fade" id="actionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" id="actionModalHeader">
+                <h5 class="modal-title" id="actionModalTitle">
+                    <i class="ri-shield-check-line me-2"></i>Konfirmasi Tindak Lanjut
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                {# Hidden input untuk menyimpan status baru yang dipilih #}
+                <input type="hidden" id="modalNewStatus">
+                {# Pesan konfirmasi yang berubah sesuai aksi #}
+                <div class="text-center mb-3" id="actionModalIcon"></div>
+                <p class="text-center fw-semibold" id="actionModalMessage"></p>
+                <div class="alert alert-light d-flex align-items-start" id="actionModalInfo">
+                    <i class="ri-information-line me-2 mt-1"></i>
+                    <small id="actionModalDescription"></small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i>Batal
+                </button>
+                <button type="button" class="btn" id="actionModalConfirmBtn" onclick="submitAction()">
+                    <i class="ri-check-line me-1"></i>Konfirmasi
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block page_js %}
+<script>
+    // ═══════════════════════════════════════════════════════════════
+    // MODAL KONFIRMASI — Membuka modal dan mengatur konten sesuai aksi
+    // ═══════════════════════════════════════════════════════════════
+    function openActionModal(newStatus) {
+        // Simpan status baru ke hidden input
+        document.getElementById('modalNewStatus').value = newStatus;
+
+        // Konfigurasi tampilan modal berdasarkan status
+        const config = {
+            'cleared': {
+                icon: '<i class="ri-check-double-line text-success" style="font-size: 3rem;"></i>',
+                title: '<i class="ri-shield-check-line me-2 text-success"></i>Konfirmasi: Tandai Aman',
+                message: 'Apakah Anda yakin anomali ini <strong class="text-success">AMAN / WAJAR</strong>?',
+                description: 'Status anomali akan diubah menjadi "Aman". Ini berarti anomali ini telah diverifikasi dan tidak ditemukan indikasi kecurangan.',
+                headerClass: 'border-success',
+                btnClass: 'btn-success',
+                btnText: '<i class="ri-check-double-line me-1"></i>Ya, Tandai Aman',
+            },
+            'investigated': {
+                icon: '<i class="ri-search-eye-line text-info" style="font-size: 3rem;"></i>',
+                title: '<i class="ri-search-eye-line me-2 text-info"></i>Konfirmasi: Sedang Diinvestigasi',
+                message: 'Tandai anomali ini sebagai <strong class="text-info">SEDANG DIINVESTIGASI</strong>?',
+                description: 'Status anomali akan diubah menjadi "Sedang Diinvestigasi". Tim audit akan melakukan pengecekan lebih lanjut.',
+                headerClass: 'border-info',
+                btnClass: 'btn-info',
+                btnText: '<i class="ri-search-eye-line me-1"></i>Ya, Tandai Investigasi',
+            },
+            'rejected': {
+                icon: '<i class="ri-close-circle-line text-danger" style="font-size: 3rem;"></i>',
+                title: '<i class="ri-error-warning-line me-2 text-danger"></i>Konfirmasi: Terbukti Fraud',
+                message: 'Apakah Anda yakin anomali ini <strong class="text-danger">TERBUKTI FRAUD</strong>?',
+                description: 'Status anomali akan diubah menjadi "Terbukti Fraud". Tindakan disipliner dan investigasi lanjutan mungkin diperlukan.',
+                headerClass: 'border-danger',
+                btnClass: 'btn-danger',
+                btnText: '<i class="ri-close-circle-line me-1"></i>Ya, Terbukti Fraud',
+            }
+        };
+
+        const cfg = config[newStatus];
+        if (!cfg) return;
+
+        // Terapkan konfigurasi ke elemen modal
+        document.getElementById('actionModalIcon').innerHTML = cfg.icon;
+        document.getElementById('actionModalTitle').innerHTML = cfg.title;
+        document.getElementById('actionModalMessage').innerHTML = cfg.message;
+        document.getElementById('actionModalDescription').textContent = cfg.description;
+        const confirmBtn = document.getElementById('actionModalConfirmBtn');
+        confirmBtn.className = 'btn ' + cfg.btnClass;
+        confirmBtn.innerHTML = cfg.btnText;
+
+        // Tampilkan modal Bootstrap
+        new bootstrap.Modal(document.getElementById('actionModal')).show();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SUBMIT AKSI — Kirim request AJAX ke backend
+    // ═══════════════════════════════════════════════════════════════
+    function submitAction() {
+        const newStatus = document.getElementById('modalNewStatus').value;
+        const catatan = document.getElementById('catatanReview').value;
+
+        // Kirim POST request ke endpoint update status
+        fetch('{% url "fraud_detection:alert_update_status" alert.pk %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `status=${newStatus}&catatan=${encodeURIComponent(catatan)}`
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                // Tutup modal dan reload halaman untuk menampilkan status baru
+                bootstrap.Modal.getInstance(document.getElementById('actionModal')).hide();
+                location.reload();
+            } else {
+                alert('Gagal: ' + data.message);
+            }
+        })
+        .catch(err => alert('Terjadi kesalahan: ' + err));
+    }
+</script>
+{% endblock page_js %}

@@ -1,0 +1,81 @@
+{% extends layout_path %}
+{% load static %}
+
+{% block title %}Tutup Shift Kasir - Fraud Detection{% endblock title %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="ri-wallet-3-line me-2"></i>Tutup Shift Kasir (Blind Close)</h4>
+        <a href="{% url 'fraud_detection:cash_list' %}" class="btn btn-label-secondary">
+            <i class="ri-arrow-left-line me-1"></i>Kembali
+        </a>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0 text-white"><i class="ri-lock-2-line me-2"></i>Input Uang Fisik Di Laci</h5>
+                    <small class="text-white-50">Hitung uang fisik di laci kasir, lalu masukkan nominalnya. Sistem akan mencocokkan otomatis.</small>
+                </div>
+                {# Diberi padding-top lebih agar ada jarak antara header card dan form pertama #}
+                <div class="card-body pt-4">
+                    <form method="post" id="formBlindClose">
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Cabang / Gudang <span class="text-danger">*</span></label>
+                                <select name="gudang" class="form-select" required>
+                                    <option value="">-- Pilih Cabang --</option>
+                                    {% for g in gudang_list %}
+                                    <option value="{{ g.pk }}">{{ g.nama }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <!-- Empty for spacing -->
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Waktu Mulai Shift <span class="text-danger">*</span></label>
+                                <input type="datetime-local" name="shift_start" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Waktu Akhir Shift <span class="text-danger">*</span></label>
+                                <input type="datetime-local" name="shift_end" class="form-control" required>
+                            </div>
+                            <div class="col-12">
+                                <hr>
+                                <label class="form-label fs-5 fw-bold text-primary">
+                                    <i class="ri-money-dollar-box-line me-1"></i>Total Uang Fisik di Laci (Rp) <span class="text-danger">*</span>
+                                </label>
+                                <input type="number" name="actual_amount" class="form-control form-control-lg text-center fw-bold"
+                                    style="font-size: 1.5rem; letter-spacing: 2px;" placeholder="0" min="0" step="1" required>
+                                <div class="form-text text-muted">Hitung uang tunai fisik di laci Anda, lalu masukkan nominalnya di atas.</div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Catatan (Opsional)</label>
+                                <textarea name="catatan" class="form-control" rows="3" placeholder="Catatan tambahan jika ada..."></textarea>
+                            </div>
+                            <div class="col-12">
+                                <div class="alert alert-warning d-flex align-items-start">
+                                    <i class="ri-information-line me-2 ri-20px mt-1"></i>
+                                    <div>
+                                        <strong>Perhatian:</strong> Setelah Anda submit, sistem akan otomatis menghitung selisih dengan total transaksi POS 
+                                        dalam rentang waktu shift Anda. Pastikan nominal yang Anda input sudah benar.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12 text-end">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="ri-check-line me-1"></i>Submit & Tutup Shift
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

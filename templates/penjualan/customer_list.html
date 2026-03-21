@@ -1,0 +1,724 @@
+{% extends 'layout/layout_vertical.html' %}
+{% comment %}
+==========================================================================
+CUSTOMER LIST - Daftar Pelanggan
+Halaman daftar pelanggan/customer dengan DataTables.
+Fitur: tambah, edit, hapus customer. Tabel: nama, kontak, alamat, aksi.
+==========================================================================
+{% endcomment %}
+{% load static %}
+
+{% block title %}Daftar Customer - Penjualan ERP{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+{% endblock vendor_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="ri-user-heart-line me-2"></i>Daftar Customer</h4>
+            <p class="text-muted mb-0">Kelola data pelanggan untuk penjualan produk</p>
+        </div>
+        {% if can_create.penjualan %}
+        <a href="{% url 'penjualan:customer-add' %}" class="btn btn-primary">
+            <i class="ri-add-line me-1"></i>Tambah Customer
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <!-- Baris 1: Filter Inputs -->
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="searchCustomer">Cari Customer</label>
+                    <div class="input-group input-group-merge">
+                        <span class="input-group-text"><i class="ri-search-line"></i></span>
+                        <input type="text" id="searchCustomer" class="form-control" placeholder="Nama atau kode customer">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="statusFilter">
+                        <option value="">Semua Status</option>
+                        <option value="aktif">Aktif</option>
+                        <option value="nonaktif">Nonaktif</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Baris 2: Pilih Kolom (kiri) dan Tombol Filter (kanan) -->
+            <div class="row g-3 mt-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Pilih Kolom</label>
+                    <div class="dropdown">
+                        <button class="btn btn-label-secondary dropdown-toggle waves-effect w-100" type="button"
+                            id="columnFilterDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                            aria-expanded="false">
+                            <i class="ri-layout-column-line me-1"></i>
+                            Pilih Kolom yang Ditampilkan
+                        </button>
+                        <div class="dropdown-menu p-3" aria-labelledby="columnFilterDropdown" style="min-width: 280px;">
+                            <h6 class="dropdown-header px-0 mb-2">Kolom Tabel</h6>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input column-checkbox" type="checkbox" value="0" id="col-kode"
+                                    checked onchange="toggleColumns()">
+                                <label class="form-check-label" for="col-kode">Kode</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input column-checkbox" type="checkbox" value="1" id="col-nama"
+                                    checked onchange="toggleColumns()">
+                                <label class="form-check-label" for="col-nama">Nama Customer</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input column-checkbox" type="checkbox" value="2"
+                                    id="col-telepon" checked onchange="toggleColumns()">
+                                <label class="form-check-label" for="col-telepon">Telepon</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input column-checkbox" type="checkbox" value="3" id="col-email"
+                                    checked onchange="toggleColumns()">
+                                <label class="form-check-label" for="col-email">Email</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input column-checkbox" type="checkbox" value="4"
+                                    id="col-alamat" checked onchange="toggleColumns()">
+                                <label class="form-check-label" for="col-alamat">Alamat</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input column-checkbox" type="checkbox" value="5"
+                                    id="col-status" checked onchange="toggleColumns()">
+                                <label class="form-check-label" for="col-status">Status</label>
+                            </div>
+                            <div class="dropdown-divider my-2"></div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-primary flex-fill" onclick="selectAllColumns()">
+                                    <i class="ri-checkbox-multiple-line ri-16px"></i> Semua
+                                </button>
+                                <button class="btn btn-sm btn-label-secondary flex-fill" onclick="deselectAllColumns()">
+                                    <i class="ri-checkbox-blank-line ri-16px"></i> Kosongkan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-1">Klik untuk memilih kolom</small>
+                </div>
+                <div class="col-md-6"></div>
+                <div class="col-md-3">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="applyFilter()">
+                            <i class="ri-filter-3-line me-1"></i>Terapkan Filter
+                        </button>
+                        <button class="btn btn-label-secondary" onclick="resetFilter()">
+                            <i class="ri-refresh-line me-1"></i>Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Daftar Customer</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-label-success" onclick="exportToExcel()"><i
+                        class="ri-file-excel-2-line me-1"></i>Export Excel</button>
+                <button class="btn btn-sm btn-label-danger" onclick="exportToPDF()"><i
+                        class="ri-file-pdf-line me-1"></i>Export PDF</button>
+            </div>
+        </div>
+        <div class="card-datatable table-responsive">
+            <table class="datatables-customer table table-hover" id="customerTable">
+                <thead>
+                    <tr>
+                        <th>Kode</th>
+                        <th>Nama Customer</th>
+                        <th>Telepon</th>
+                        <th>Email</th>
+                        <th>Alamat</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for customer in customer_list %}
+                    <tr>
+                        <td><code>{{ customer.kode }}</code></td>
+                        <td><strong>{{ customer.nama }}</strong></td>
+                        <td>{{ customer.telepon|default:"-" }}</td>
+                        <td>{{ customer.email|default:"-" }}</td>
+                        <td>{{ customer.alamat|default:"-"|truncatechars:40 }}</td>
+                        <td>
+                            {% if customer.aktif %}
+                            <span class="badge bg-label-success">Aktif</span>
+                            {% else %}
+                            <span class="badge bg-label-secondary">Nonaktif</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if can_edit.penjualan or can_delete.penjualan %}
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow"
+                                    data-bs-toggle="dropdown"><i class="ri-more-2-line"></i></button>
+                                <div class="dropdown-menu">
+                                    {% if can_edit.penjualan %}
+                                    <a class="dropdown-item" href="{% url 'penjualan:customer-edit' customer.pk %}"><i
+                                            class="ri-edit-line me-2"></i>Edit</a>
+                                    {% endif %}
+                                    {% if can_edit.penjualan and can_delete.penjualan %}
+                                    <div class="dropdown-divider"></div>
+                                    {% endif %}
+                                    {% if can_delete.penjualan %}
+                                    <a class="dropdown-item text-danger" href="javascript:void(0);"
+                                        onclick="confirmDelete({{ customer.pk }}, '{{ customer.nama }}')">
+                                        <i class="ri-delete-bin-line me-2"></i>Hapus Customer
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="badge bg-label-secondary">View Only</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5"><i
+                                class="ri-user-heart-line ri-3x text-muted mb-3 d-block"></i>
+                            <p class="text-muted mb-0">Belum ada customer</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-footer-summary">
+                    <tr>
+                        <td colspan="6" class="text-start ps-4 py-3" style="vertical-align: middle;">
+                            <div class="d-flex align-items-center justify-content-start">
+                                <i class="ri-calculator-line me-2 text-primary" style="font-size: 1.5rem;"></i>
+                                <div class="text-start">
+                                    <strong class="d-block" style="font-size: 1rem;">RINGKASAN</strong>
+                                    <small class="text-muted" style="font-size: 0.75rem;">{{ total_customer }} Customer
+                                        Terdaftar</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteCustomerModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger align-items-center py-3">
+                    <h5 class="modal-title text-white mb-0">
+                        <i class="ri-delete-bin-line me-2"></i>Konfirmasi Hapus
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center py-3">
+                        <i class="ri-error-warning-line text-danger" style="font-size: 4rem;"></i>
+                        <h4 class="mt-3 mb-2">Anda yakin ingin menghapus customer ini?</h4>
+                        <p class="text-muted mb-0">Customer: <strong id="deleteCustomerName"></strong></p>
+                        <p class="text-danger small mt-2">Tindakan ini tidak dapat dibatalkan!</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">
+                        <i class="ri-close-line me-1"></i>Batal
+                    </button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                        <i class="ri-delete-bin-line me-1"></i>Ya, Hapus Customer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% csrf_token %}
+{% endblock content %}
+
+{% block page_js %}
+<style>
+    @media (max-width: 768px) {
+        .card-datatable {
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .datatables-customer {
+            min-width: 1000px !important;
+        }
+    }
+
+    .dataTables_wrapper .dataTables_info {
+        padding: 1rem 1.5rem;
+        font-size: 0.875rem;
+        color: #697a8d
+    }
+
+    .dataTables_wrapper .dataTables_paginate {
+        padding: 1rem 1.5rem
+    }
+
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter {
+        padding: 0 1.5rem 1rem 1.5rem
+    }
+
+    .dataTables_wrapper .dataTables_filter input {
+        border: 1px solid #d9dee3;
+        border-radius: 0.375rem;
+        padding: 0.4375rem 0.875rem
+    }
+
+    .dataTables_wrapper .dataTables_length select {
+        border: 1px solid #d9dee3;
+        border-radius: 0.375rem;
+        padding: 0.4375rem 2rem 0.4375rem 0.875rem
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        padding: 0.438rem 0.875rem;
+        border-radius: 0.375rem;
+        margin: 0 0.125rem;
+        border: none;
+        background: transparent;
+        color: #697a8d
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+        background: #696cff !important;
+        color: white !important;
+        border: none
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.disabled) {
+        background: rgba(105, 108, 255, 0.08) !important;
+        border: none;
+        color: #696cff !important
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+        color: #c7cdd4 !important;
+        cursor: not-allowed
+    }
+
+    .card-datatable {
+        padding-bottom: 0
+    }
+
+    .datatables-customer thead th {
+        font-weight: 600;
+        font-size: 0.8125rem;
+        text-transform: none;
+        letter-spacing: 0
+    }
+
+    /* Mobile Responsiveness - Horizontal Scroll */
+    @media (max-width: 768px) {
+        .card-datatable {
+            overflow-x: hidden !important;
+            -webkit-overflow-scrolling: touch;
+            max-width: 100%;
+        }
+
+        .datatables-customer {
+            min-width: 1000px !important;
+            width: 1000px !important;
+            table-layout: auto !important;
+        }
+
+        .dataTables_wrapper {
+            overflow-x: hidden !important;
+            max-width: 100% !important;
+        }
+    }
+</style>
+<script>
+    $(document).ready(function () {
+        {% if customer_list %}
+        $('#customerTable').DataTable({
+            language: {
+                "sEmptyTable": "Tidak ada data yang tersedia pada tabel ini",
+                "sProcessing": "Sedang memproses...",
+                "sLengthMenu": "Tampilkan _MENU_ data",
+                "sZeroRecords": "Tidak ditemukan data yang sesuai",
+                "sInfo": "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
+                "sInfoEmpty": "Menampilkan 0 sampai 0 dari 0 data",
+                "sInfoFiltered": "(disaring dari _MAX_ total data)",
+                "sSearch": "Cari:",
+                "oPaginate": {
+                    "sFirst": "Pertama",
+                    "sPrevious": "Sebelumnya",
+                    "sNext": "Selanjutnya",
+                    "sLast": "Terakhir"
+                }
+            },
+            order: [[1, 'asc']],
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 75, 100, -1], ['10', '25', '50', '75', '100', 'Semua']],
+            responsive: false,
+            columnDefs: [{
+                orderable: false,
+                targets: [6]
+            }],
+            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>><"table-responsive"rt><"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
+            initComplete: function () {
+                $('.dataTables_filter input').attr('placeholder', 'Cari customer...');
+            }
+        });
+        {% endif %}
+    });
+
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    // Template Data for Independent Headers/Footers
+    const EXCEL_INFO = {
+        name: "{{ export_excel_template.header_nama_perusahaan|escapejs|default:'Nama Perusahaan' }}",
+        address: "{{ export_excel_template.header_alamat|escapejs|default:'Alamat Bisnis' }}",
+        phone: "{{ export_excel_template.header_telepon|escapejs|default:'No Telp' }}",
+        email: "Email: {{ export_excel_template.header_email|escapejs|default:'email@domain.com' }}",
+        website: "{{ export_excel_template.header_website|escapejs|default:'' }}",
+        copyright: "{{ export_excel_template.footer_copyright|escapejs|default:'Hak Cipta Dilindungi' }}"
+    };
+
+    const PDF_INFO = {
+        name: "{{ export_pdf_template.header_nama_perusahaan|escapejs|default:'Nama Perusahaan' }}",
+        address: "{{ export_pdf_template.header_alamat|escapejs|default:'Alamat Bisnis' }}",
+        phone: "{{ export_pdf_template.header_telepon|escapejs|default:'No Telp' }}",
+        email: "Email: {{ export_pdf_template.header_email|escapejs|default:'email@domain.com' }}",
+        website: "{{ export_pdf_template.header_website|escapejs|default:'' }}",
+        copyright: "{{ export_pdf_template.footer_copyright|escapejs|default:'Hak Cipta Dilindungi' }}"
+    };
+
+    const FOOTER_DATA = {};
+    const FOOTER_LABEL = 'RINGKASAN';
+
+    function exportToExcel() {
+        const table = document.getElementById('customerTable');
+        if (!table) { alert('Tabel tidak ditemukan!'); return; }
+
+        const tableObj = new $.fn.dataTable.Api('#customerTable');
+
+        let colCount = 0;
+        let visibleColumns = [];
+
+        tableObj.columns().every(function (index) {
+            const headerNode = this.header();
+            const headerText = headerNode ? headerNode.textContent.trim() : '';
+            if (this.visible() && headerText.toLowerCase() !== 'aksi' && headerText.toLowerCase() !== 'gambar') {
+                visibleColumns.push({ index: index, text: headerText });
+                colCount++;
+            }
+        });
+
+        let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+        html += '<head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>';
+        html += '<body>';
+
+        // --- ADD EXCEL HEADER (Company Info) ---
+        html += '<table border="0">';
+        if (typeof EXCEL_INFO !== 'undefined') {
+            html += `<tr><td colspan="${colCount}" style="text-align:center; font-size:16px; font-weight:bold; color:#5F61E6;">${EXCEL_INFO.name}</td></tr>`;
+            html += `<tr><td colspan="${colCount}" style="text-align:center; font-size:12px;">${EXCEL_INFO.address}</td></tr>`;
+            html += `<tr><td colspan="${colCount}" style="text-align:center; font-size:12px;">${EXCEL_INFO.phone} | ${EXCEL_INFO.email}</td></tr>`;
+            html += `<tr><td colspan="${colCount}"></td></tr>`; // empty row for spacing
+        }
+        html += '</table>';
+
+        html += '<table border="1">';
+        html += '<thead><tr style="background-color: #696CFF; color: #FFFFFF; font-weight: bold;">';
+
+        visibleColumns.forEach(col => {
+            html += `<th>${col.text}</th>`;
+        });
+
+        html += '</tr></thead><tbody>';
+
+        tableObj.rows({ page: 'current' }).every(function (rowIdx, tableLoop, rowLoop) {
+            html += '<tr>';
+            visibleColumns.forEach(col => {
+                let cellNode = tableObj.cell(rowIdx, col.index).node();
+                let text = cellNode ? cellNode.textContent.trim().replace(/\s+/g, ' ') : '';
+                html += `<td>${text}</td>`;
+            });
+            html += '</tr>';
+        });
+
+        // Build summary row from explicit FOOTER_DATA
+        if (typeof FOOTER_DATA !== 'undefined' && Object.keys(FOOTER_DATA).length > 0) {
+            html += '<tr style="background-color: #f8f9fa; font-weight: bold;">';
+            let ri = 0;
+            while (ri < visibleColumns.length) {
+                let colIdx = visibleColumns[ri].index;
+                if (FOOTER_DATA[colIdx] !== undefined) {
+                    html += `<td>${FOOTER_DATA[colIdx]}</td>`;
+                    ri++;
+                } else {
+                    let spanCount = 0;
+                    let si = ri;
+                    while (si < visibleColumns.length && FOOTER_DATA[visibleColumns[si].index] === undefined) { spanCount++; si++; }
+                    html += ri === 0 ? `<td colspan="${spanCount}">${FOOTER_LABEL}</td>` : `<td colspan="${spanCount}"></td>`;
+                    ri += spanCount;
+                }
+            }
+            html += '</tr>';
+        }
+        html += '</tbody></table>';
+
+        html += '<table border="0">';
+        html += `<tr><td colspan="${colCount}"></td></tr>`;
+        if (typeof EXCEL_INFO !== 'undefined') {
+            html += `<tr><td colspan="${colCount}" style="text-align:right; font-size:10px; color:#697A8D;">Dicetak pada: ${new Date().toLocaleString('id-ID')}</td></tr>`;
+            html += `<tr><td colspan="${colCount}" style="text-align:right; font-size:10px; color:#697A8D;">${EXCEL_INFO.copyright}</td></tr>`;
+        }
+        html += '</table></body></html>';
+
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        const link = document.createElement('a');
+        link.setAttribute('href', URL.createObjectURL(blob));
+        link.setAttribute('download', 'Daftar_Customer_' + new Date().toISOString().slice(0, 10) + '.xls');
+        link.click();
+    }
+
+    function exportToPDF() {
+        if (typeof pdfMake === 'undefined') { alert('pdfMake library tidak tersedia!'); return; }
+
+        const table = document.getElementById('customerTable');
+        if (!table) { alert('Tabel tidak ditemukan!'); return; }
+
+        const tableObj = new $.fn.dataTable.Api('#customerTable');
+
+        const headers = [];
+        let visibleColumns = [];
+
+        tableObj.columns().every(function (index) {
+            const headerNode = this.header();
+            const headerText = headerNode ? headerNode.textContent.trim() : '';
+            if (this.visible() && headerText.toLowerCase() !== 'aksi' && headerText.toLowerCase() !== 'gambar') {
+                headers.push({
+                    text: headerText,
+                    style: 'tableHeader',
+                    fillColor: '#696CFF',
+                    color: '#FFFFFF',
+                    bold: true
+                });
+                visibleColumns.push({ index: index });
+            }
+        });
+
+        const body = [headers];
+
+        tableObj.rows({ page: 'current' }).every(function (rowIdx, tableLoop, rowLoop) {
+            const row = [];
+            visibleColumns.forEach(col => {
+                let cellNode = tableObj.cell(rowIdx, col.index).node();
+                let text = cellNode ? cellNode.textContent.trim().replace(/\s+/g, ' ') : '';
+                row.push(text);
+            });
+            if (row.length > 0) body.push(row);
+        });
+
+        // Build summary row from explicit FOOTER_DATA
+        if (typeof FOOTER_DATA !== 'undefined' && Object.keys(FOOTER_DATA).length > 0) {
+            const summaryRow = [];
+            let ri = 0;
+            while (ri < visibleColumns.length) {
+                let colIdx = visibleColumns[ri].index;
+                if (FOOTER_DATA[colIdx] !== undefined) {
+                    summaryRow.push({ text: String(FOOTER_DATA[colIdx]), bold: true, fillColor: '#f8f9fa' });
+                    ri++;
+                } else {
+                    let spanCount = 0;
+                    let si = ri;
+                    while (si < visibleColumns.length && FOOTER_DATA[visibleColumns[si].index] === undefined) { spanCount++; si++; }
+                    summaryRow.push({ text: (ri === 0) ? FOOTER_LABEL : '', colSpan: spanCount, bold: true, fillColor: '#f8f9fa' });
+                    for (let k = 1; k < spanCount; k++) { summaryRow.push({}); }
+                    ri += spanCount;
+                }
+            }
+            if (summaryRow.length > 0) body.push(summaryRow);
+        }
+
+        let companyInfoExists = typeof PDF_INFO !== 'undefined';
+
+        const docDefinition = {
+            pageOrientation: 'landscape',
+            pageMargins: [40, 100, 40, 60],
+            header: function (currentPage) {
+                if (companyInfoExists) {
+                    return {
+                        margin: [40, 20, 40, 10],
+                        columns: [
+                            {
+                                width: '*',
+                                stack: [
+                                    { text: PDF_INFO.name, style: 'companyName' },
+                                    { text: PDF_INFO.address, style: 'companyInfo' },
+                                    { text: PDF_INFO.phone + ' | ' + PDF_INFO.email, style: 'companyInfo' }
+                                ]
+                            },
+                            { width: 'auto', stack: [{ text: 'Halaman ' + currentPage, style: 'pageNumber', alignment: 'right' }] }
+                        ]
+                    };
+                }
+                return { text: 'Halaman ' + currentPage, margin: [40, 20, 40, 10], alignment: 'right', style: 'pageNumber' };
+            },
+            content: [
+                { text: 'DAFTAR CUSTOMER', style: 'documentTitle', margin: [0, 0, 0, 5] },
+                { text: 'Tanggal: ' + new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }), style: 'dateText', margin: [0, 0, 0, 20] },
+                {
+                    table: { headerRows: 1, widths: Array(headers.length).fill('auto'), body: body },
+                    layout: {
+                        fillColor: (rowIndex) => (rowIndex === 0) ? '#696CFF' : ((rowIndex % 2 === 0) ? '#F5F5F9' : null),
+                        hLineWidth: () => 0.5,
+                        vLineWidth: () => 0.5,
+                        hLineColor: () => '#DBDADE',
+                        vLineColor: () => '#DBDADE'
+                    }
+                }
+            ],
+            footer: function (currentPage, pageCount) {
+                if (companyInfoExists) {
+                    return {
+                        margin: [40, 10, 40, 10],
+                        columns: [
+                            { text: 'Dicetak pada: ' + new Date().toLocaleString('id-ID'), style: 'footerText' },
+                            { text: PDF_INFO.copyright, style: 'footerText', alignment: 'right' }
+                        ]
+                    };
+                }
+                return { text: 'Dicetak pada: ' + new Date().toLocaleString('id-ID'), margin: [40, 10, 40, 10], style: 'footerText' };
+            },
+            styles: {
+                companyName: { fontSize: 14, bold: true, color: '#5F61E6' },
+                companyInfo: { fontSize: 9, color: '#697A8D' },
+                pageNumber: { fontSize: 9, color: '#697A8D' },
+                documentTitle: { fontSize: 18, bold: true, color: '#5F61E6' },
+                dateText: { fontSize: 10, color: '#697A8D' },
+                tableHeader: { bold: true, fontSize: 10, color: '#FFFFFF' },
+                footerText: { fontSize: 8, color: '#697A8D' }
+            },
+            defaultStyle: { fontSize: 9 }
+        };
+
+        pdfMake.createPdf(docDefinition).download('Daftar_Customer_' + new Date().toISOString().slice(0, 10) + '.pdf');
+    }
+
+    function toggleColumns() {
+        const checkboxes = document.querySelectorAll('.column-checkbox');
+        const table = new $.fn.dataTable.Api('#customerTable');
+        checkboxes.forEach(cb => {
+            const colIdx = parseInt(cb.value);
+            table.column(colIdx).visible(cb.checked);
+        });
+    }
+
+    function selectAllColumns() {
+        document.querySelectorAll('.column-checkbox').forEach(cb => {
+            cb.checked = true;
+        });
+        toggleColumns();
+    }
+
+    function deselectAllColumns() {
+        document.querySelectorAll('.column-checkbox').forEach(cb => {
+            cb.checked = false;
+        });
+        toggleColumns();
+    }
+
+    function applyFilter() {
+        const searchValue = document.getElementById('searchCustomer').value;
+        const statusValue = document.getElementById('statusFilter').value;
+
+        const table = new $.fn.dataTable.Api('#customerTable');
+
+        // Apply search filter
+        table.search(searchValue).draw();
+
+        // Apply status filter
+        if (statusValue) {
+            $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+                const status = data[5].toLowerCase(); // Kolom status
+                return status.includes(statusValue.toLowerCase());
+            });
+            table.draw();
+            $.fn.dataTable.ext.search.pop();
+        }
+    }
+
+    function resetFilter() {
+        document.getElementById('searchCustomer').value = '';
+        document.getElementById('statusFilter').value = '';
+        new $.fn.dataTable.Api('#customerTable').search('').draw();
+    }
+
+    // Tangani Hapus Customer
+    let deleteId = null;
+function confirmDelete(id, name) {
+    deleteId = id;
+    $('#deleteCustomerName').text(name);
+    $('#deleteCustomerModal .delete-error-msg').remove();
+    new bootstrap.Modal(document.getElementById('deleteCustomerModal')).show();
+}
+
+$('#confirmDeleteBtn').on('click', function() {
+    if (!deleteId) return;
+    var btn = $(this);
+    var originalText = btn.html();
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Menghapus...');
+    $('#deleteCustomerModal .delete-error-msg').remove();
+    var csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    $.ajax({
+        url: `/penjualan/customer/${deleteId}/delete/`,
+        type: 'POST',
+        headers: {'X-CSRFToken': csrftoken},
+        success: function(response) {
+            if (response.success) {
+                $('#deleteCustomerModal').modal('hide');
+                location.reload();
+            } else {
+                $('#deleteCustomerModal .modal-body').append('<div class="delete-error-msg alert alert-danger d-flex align-items-start mt-3 mb-0" role="alert"><i class="ri-error-warning-line me-2 fs-5"></i><div>' + (response.message || 'Gagal menghapus data.') + '</div></div>');
+                btn.prop('disabled', false).html(originalText);
+            }
+        },
+        error: function(xhr) {
+            var msg = 'Terjadi kesalahan pada server. Silakan coba lagi.';
+            try { var r = JSON.parse(xhr.responseText); msg = r.message || msg; } catch(e) {}
+            $('#deleteCustomerModal .modal-body').append('<div class="delete-error-msg alert alert-danger d-flex align-items-start mt-3 mb-0" role="alert"><i class="ri-error-warning-line me-2 fs-5"></i><div>' + msg + '</div></div>');
+            btn.prop('disabled', false).html(originalText);
+        }
+    });
+});
+
+    
+</script>
+{% endblock page_js %}
