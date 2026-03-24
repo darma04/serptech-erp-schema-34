@@ -121,8 +121,12 @@ class LicenseConfig(models.Model):
         self.validation_cache = is_valid
         self.validation_message = message
         self.last_validated = timezone.now()
-        # Cache berlaku 1 jam (bukan 24 jam) agar perubahan status di CLS lebih cepat terasa
-        self.cache_expires_at = timezone.now() + timedelta(hours=1)
+        if is_valid:
+            # Cache valid berlaku 5 menit — agar perubahan status di CLS cepat terasa
+            self.cache_expires_at = timezone.now() + timedelta(minutes=5)
+        else:
+            # Cache invalid hanya berlaku 1 menit — agar bisa cek ulang lebih cepat
+            self.cache_expires_at = timezone.now() + timedelta(minutes=1)
         if product_name:
             self.product_name = product_name
         if client_name:
