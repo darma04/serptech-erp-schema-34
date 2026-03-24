@@ -27,6 +27,7 @@ import urllib.error
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.conf import settings
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -94,26 +95,28 @@ class LicenseMiddleware:
                     reverse('license_activation') + '?error=invalid'
                 )
 
-        # Untuk pengecekan berkala ke CLS, hanya dilakukan jika user sudah login
-        # (user yang belum login akan ditangani oleh auth middleware setelah ini)
-        if not hasattr(request, 'user') or not request.user.is_authenticated:
-            return self.get_response(request)
-
+        # ============================================================
         # Cache expired atau belum ada → ping CLS untuk validasi ulang
+        # PENTING: Pengecekan ini dilakukan untuk SEMUA user,
+        # baik yang sudah login maupun belum, agar perubahan status
+        # di CLS (suspend, expired) langsung berdampak realtime.
+        # ============================================================
         hardware_id = config.hardware_id or generate_hardware_id()
         cls_url = getattr(settings, 'LICENSE_SERVER_URL', config.cls_server_url)
-        product_code = getattr(settings, 'PRODUCT_CODE', 'SIMKOS')
 
         is_valid = self._validate_with_cls(config, hardware_id, cls_url)
 
         if is_valid:
             return self.get_response(request)
 
-        # Jika validasi gagal TAPI CLS tidak bisa dihubungi (offline tolerance)
-        # Hanya toleransi jika cache LAMA masih mengatakan valid
+        # Jika validasi gagal DAN CLS tidak bisa dihubungi (offline)
+        # Toleransi HANYA jika cache terakhir valid DAN belum terlalu lama (maks 1 jam)
         if config.validation_cache and config.last_validated:
-            logger.warning("CLS tidak bisa dihubungi, menggunakan cache lama (masih valid).")
-            return self.get_response(request)
+            from datetime import timedelta
+            offline_tolerance = timedelta(hours=1)
+            if (timezone.now() - config.last_validated) < offline_tolerance:
+                logger.warning("CLS tidak bisa dihubungi, toleransi offline (cache < 1 jam).")
+                return self.get_response(request)
 
         # Benar-benar invalid → redirect ke halaman aktivasi dengan pesan error
         return HttpResponseRedirect(

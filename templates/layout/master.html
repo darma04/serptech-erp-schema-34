@@ -15,7 +15,7 @@
   <head>
     <title>{% block title %}{% endblock title %} | {{ system_title|default:"ERP System" }}</title>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
     <!-- Meta Deskripsi SEO (Dinamis dari Pengaturan Meta Sistem) -->
     <meta name="description" content="{% if system_description %}{{ system_description }}{% else %}{% get_theme_variables 'template_description' %}{% endif %}" />
     <!-- Meta Keywords SEO (Dinamis dari Pengaturan Meta Sistem) -->
@@ -35,6 +35,26 @@
     {% block vendor_css %}{% endblock vendor_css %}
 
     <!--Page CSS-->
+    <!-- Safe Area CSS untuk Capacitor Mobile App -->
+    <style>
+      /* Kompensasi safe-area untuk status bar Android/iOS */
+      .layout-navbar {
+        padding-top: env(safe-area-inset-top, 0px) !important;
+      }
+      /* Pastikan body tidak terpotong oleh safe area */
+      body {
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      /* Layout page harus mempertimbangkan safe area */
+      .layout-page {
+        padding-top: 0 !important;
+      }
+      /* Pastikan menu sidebar juga aman */
+      .layout-menu {
+        padding-top: env(safe-area-inset-top, 0px) !important;
+      }
+    </style>
     {% block page_css %}{% endblock page_css %}
 
 
@@ -58,6 +78,9 @@
 
     <!--Page Javascript-->
     {% block page_js %} {% endblock page_js %}
+
+    <!-- Export Utils — Helper download file untuk Capacitor WebView -->
+    <script src="{% static 'js/export_utils.js' %}"></script>
 
     {% if user.is_authenticated %}
     {% load ai_tags %}

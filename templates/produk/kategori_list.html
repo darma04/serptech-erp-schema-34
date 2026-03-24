@@ -458,10 +458,8 @@ Fitur: tambah, edit, hapus kategori. Filter dan pencarian.
 
         const BOM = '\uFEFF';
         const blob = new Blob([BOM + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-        const link = document.createElement('a');
-        link.setAttribute('href', URL.createObjectURL(blob));
-        link.setAttribute('download', 'Kategori_Produk_' + new Date().toISOString().slice(0, 10) + '.xls');
-        link.click();
+        // Gunakan _downloadBlob() dari export_utils.js — kompatibel browser + Capacitor WebView
+        _downloadBlob(blob, 'Kategori_Produk_' + new Date().toISOString().slice(0, 10) + '.xls');
     }
 
     function exportToPDF() {
@@ -585,7 +583,15 @@ Fitur: tambah, edit, hapus kategori. Filter dan pencarian.
             defaultStyle: { fontSize: 9 }
         };
 
-        pdfMake.createPdf(docDefinition).download('Kategori_Produk' + '' + '' + '' + '' + '' + '' + '' + '' + '' + '_' + new Date().toISOString().slice(0, 10) + '.pdf');
+        // Gunakan _downloadBlob() dari export_utils.js — kompatibel browser + Capacitor WebView
+        var pdfDoc = pdfMake.createPdf(docDefinition);
+        if (typeof _isWebView === 'function' && _isWebView()) {
+            pdfDoc.getBlob(function(blob) {
+                _downloadBlob(blob, 'Kategori_Produk_' + new Date().toISOString().slice(0, 10) + '.pdf');
+            });
+        } else {
+            pdfDoc.download('Kategori_Produk_' + new Date().toISOString().slice(0, 10) + '.pdf');
+        }
     }
 
     // Tangani Hapus Kategori via event delegation (.delete-item dari action_column.html)
