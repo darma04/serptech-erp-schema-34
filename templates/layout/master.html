@@ -35,24 +35,22 @@
     {% block vendor_css %}{% endblock vendor_css %}
 
     <!--Page CSS-->
-    <!-- Safe Area CSS untuk Capacitor Mobile App -->
+    <!-- Safe Area & Mobile Navbar CSS -->
     <style>
-      /* Kompensasi safe-area untuk status bar Android/iOS */
-      .layout-navbar {
-        padding-top: env(safe-area-inset-top, 0px) !important;
-      }
-      /* Pastikan body tidak terpotong oleh safe area */
-      body {
-        padding-top: env(safe-area-inset-top, 0px);
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-      }
-      /* Layout page harus mempertimbangkan safe area */
-      .layout-page {
-        padding-top: 0 !important;
-      }
-      /* Pastikan menu sidebar juga aman */
-      .layout-menu {
-        padding-top: env(safe-area-inset-top, 0px) !important;
+      /*
+       * Capacitor Mobile App CSS Adjustments
+       * overlaysWebView=false di capacitor.config.json sudah membuat
+       * WebView dimulai di bawah status bar, jadi tidak perlu padding-top lagi.
+       * CSS ini hanya menyeimbangkan padding navbar & kompensasi safe-area
+       * sebagai fallback jika overlaysWebView gagal di device tertentu.
+       */
+      @supports (padding-top: env(safe-area-inset-top)) {
+        .layout-navbar {
+          padding-top: env(safe-area-inset-top, 0px) !important;
+        }
+        .layout-menu {
+          padding-top: env(safe-area-inset-top, 0px) !important;
+        }
       }
     </style>
     {% block page_css %}{% endblock page_css %}
