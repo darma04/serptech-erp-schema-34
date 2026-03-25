@@ -119,24 +119,27 @@
         }
       }
 
-      // ── WEBVIEW DOWNLOAD (langsung via data URI → DownloadListener Java) ──
+      // ── WEBVIEW DOWNLOAD (Ultimate Murni Native Bridge) ──
       function _downloadBlobWebView(blob, filename) {
-        // Konversi blob ke data URI, lalu buat <a download> link.
-        // DownloadListener di MainActivity.java akan menangkap download ini
-        // dan menyimpan file ke folder Downloads + Toast notifikasi.
-        // TANPA popup, TANPA navigator.share — langsung download.
         var reader = new FileReader();
         reader.onloadend = function() {
-          var a = document.createElement('a');
-          a.href = reader.result;
-          a.download = filename;
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(function() {
-            document.body.removeChild(a);
-          }, 1000);
-          console.log('[ExportUtils] Download triggered: ' + filename);
+          var base64data = reader.result;
+          // Ekstrak string base64 asli dengan memotong header data uri
+          var pureBase64 = base64data.split(',')[1];
+          
+          if (window.SerpApp && typeof window.SerpApp.saveBase64 === 'function') {
+            console.log('[ExportUtils] Menggunakan JavascriptInterface SerpApp Native');
+            window.SerpApp.saveBase64(pureBase64 || '', filename, blob.type || 'application/octet-stream');
+          } else {
+            console.log('[ExportUtils] Fallback: Memicu Download Listener standar');
+            var a = document.createElement('a');
+            a.href = base64data;
+            a.download = filename;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() { document.body.removeChild(a); }, 1000);
+          }
         };
         reader.readAsDataURL(blob);
       }
