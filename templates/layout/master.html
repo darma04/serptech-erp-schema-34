@@ -13,6 +13,14 @@
 <html lang="en" class="{{style}}-style {{navbar_type_class}} {{header_type_class}} {{menu_fixed_class}} {{menu_collapsed_class}} {{footer_fixed_class}} {{display_customizer_class}} {{content_layout_class}}" dir="{{text_direction_value}}" data-theme="{{theme}}" data-assets-path="{% static '/' %}" data-base-url="{{url}}" data-framework="django" data-template="{{ menu_horizontal|yesno:'horizontal,vertical' }}-menu-{{ is_front|yesno:'front,' }}-{{ theme }}-{{style}}">
 
   <head>
+    <!-- Deteksi WebView AWAL — sebelum CSS dirender -->
+    <script>
+    (function(){
+      var ua = navigator.userAgent || '';
+      var isWV = !!window.Capacitor || /wv|WebView/i.test(ua) || (/Android/i.test(ua) && /Version\/[\d.]+/i.test(ua) && !/Chrome\/[\d.]+/i.test(ua));
+      if (isWV || /median/i.test(ua)) document.documentElement.classList.add('is-webview');
+    })();
+    </script>
     <title>{% block title %}{% endblock title %} | {{ system_title|default:"ERP System" }}</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
@@ -36,33 +44,43 @@
 
     <!--Page CSS-->
     <!-- ═══════════════════════════════════════════════════════════════════
-         MOBILE NAVBAR FIX — Padding Seimbang untuk Capacitor WebView
-         Menambahkan padding-top pada navbar agar konten (ikon ≡, Q, dll.)
-         tidak menempel ke tepi atas layar setelah status bar.
+         MOBILE NAVBAR FIX — Padding untuk Capacitor/Median WebView
+         Class .is-webview ditambahkan di <head> script di atas.
+         Padding HANYA berlaku saat di dalam WebView (aplikasi mobile).
+         Di browser biasa, padding ini TIDAK diterapkan.
          ═══════════════════════════════════════════════════════════════════ -->
     <style>
-      /* Navbar padding fix untuk mobile app (Capacitor WebView) */
-      @media (max-width: 1199.98px) {
-        .layout-navbar #layout-navbar,
-        .layout-navbar.navbar,
-        nav.layout-navbar,
-        #layout-navbar {
-          padding-top: 10px !important;
-          padding-bottom: 10px !important;
-        }
-        .layout-navbar .container-xxl,
-        .layout-navbar .container-fluid {
-          padding-top: 4px !important;
-          padding-bottom: 4px !important;
-        }
+      /* === WEBVIEW MODE: Navbar padding besar agar tidak tumpang tindih status bar === */
+      html.is-webview .layout-navbar,
+      html.is-webview nav.layout-navbar,
+      html.is-webview #layout-navbar {
+        padding-top: 36px !important;
+        padding-bottom: 10px !important;
       }
-      /* Fallback safe-area untuk device yang mendukung */
+      html.is-webview .layout-navbar .container-xxl,
+      html.is-webview .layout-navbar .container-fluid {
+        padding-top: 4px !important;
+        padding-bottom: 4px !important;
+      }
+      /* Side menu juga perlu padding top di WebView */
+      html.is-webview .layout-menu {
+        padding-top: 36px !important;
+      }
+      /* safe-area fallback — tambahan di atas 36px jika device mendukung */
       @supports (padding-top: env(safe-area-inset-top)) {
-        .layout-navbar {
+        html.is-webview .layout-navbar {
           padding-top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
         }
-        .layout-menu {
-          padding-top: env(safe-area-inset-top, 0px) !important;
+        html.is-webview .layout-menu {
+          padding-top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
+        }
+      }
+      /* === BROWSER MODE: Padding normal (tidak terlalu besar) === */
+      @media (max-width: 1199.98px) {
+        html:not(.is-webview) .layout-navbar,
+        html:not(.is-webview) nav.layout-navbar {
+          padding-top: 10px !important;
+          padding-bottom: 10px !important;
         }
       }
     </style>
@@ -91,10 +109,10 @@
     {% block page_js %} {% endblock page_js %}
 
     <!-- ═══════════════════════════════════════════════════════════════════════
-         EXPORT UTILS — INLINE (Tidak bergantung pada file external)
-         Kode ini di-embed langsung agar PASTI dimuat oleh Capacitor WebView.
-         File export_utils.js external bisa 404 di VPS jika collectstatic
-         belum dijalankan, tapi inline script ini selalu tersedia.
+         EXPORT UTILS — INLINE v3 (Tanpa Popup Overlay)
+         - WebView: Konversi blob → data URI → <a download> → DownloadListener Java
+         - Browser: Standar blob URL download
+         - TIDAK ADA popup/overlay — file langsung tersimpan
          ═══════════════════════════════════════════════════════════════════════ -->
     <script>
     (function(){
@@ -105,6 +123,7 @@
         var ua = navigator.userAgent || '';
         if (window.Capacitor) return true;
         if (/wv|WebView/i.test(ua)) return true;
+        if (/median/i.test(ua)) return true;
         if (/Android.*Version\/[\d.]+/i.test(ua) && !/Chrome\/[\d.]+/i.test(ua)) return true;
         if (/iPhone|iPad|iPod/i.test(ua) && !/Safari/i.test(ua)) return true;
         return false;
@@ -119,32 +138,32 @@
         }
       }
 
-      // ── WEBVIEW DOWNLOAD (navigator.share + overlay fallback) ───────
+      // ── WEBVIEW DOWNLOAD — TANPA POPUP ──────────────────────────────
+      // Konversi blob → data URI → buat <a download> → klik
+      // DownloadListener di Java akan menangkap data: URL ini
+      // dan menyimpan file ke folder Downloads secara native
       function _downloadBlobWebView(blob, filename) {
-        // Strategi 1: navigator.share() — Native Android Share Sheet
-        if (navigator.share && navigator.canShare) {
-          try {
-            var file = new File([blob], filename, { type: blob.type });
-            var shareData = { files: [file], title: filename };
-            if (navigator.canShare(shareData)) {
-              navigator.share(shareData)
-                .then(function() {
-                  console.log('[ExportUtils] File shared via native share');
-                })
-                .catch(function(err) {
-                  if (err.name !== 'AbortError') {
-                    console.warn('[ExportUtils] Share gagal, fallback overlay:', err);
-                    _showOverlay(blob, filename);
-                  }
-                });
-              return;
-            }
-          } catch (e) {
-            console.warn('[ExportUtils] navigator.share error:', e);
-          }
-        }
-        // Strategi 2: Overlay manual download
-        _showOverlay(blob, filename);
+        console.log('[ExportUtils] WebView download: ' + filename);
+        var reader = new FileReader();
+        reader.onloadend = function() {
+          var dataUri = reader.result;
+          var a = document.createElement('a');
+          a.href = dataUri;
+          a.download = filename;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function() {
+            if (a.parentNode) document.body.removeChild(a);
+          }, 2000);
+          console.log('[ExportUtils] Data URI download triggered for: ' + filename);
+        };
+        reader.onerror = function() {
+          console.error('[ExportUtils] FileReader error');
+          // Fallback: coba blob URL langsung
+          _downloadBlobBrowser(blob, filename);
+        };
+        reader.readAsDataURL(blob);
       }
 
       // ── BROWSER DOWNLOAD (standar) ──────────────────────────────────
@@ -158,43 +177,12 @@
           document.body.appendChild(a);
           a.click();
           setTimeout(function() {
-            document.body.removeChild(a);
+            if (a.parentNode) document.body.removeChild(a);
             URL.revokeObjectURL(url);
           }, 300);
         } catch (e) {
           console.error('[ExportUtils] Browser download gagal:', e);
-          _showOverlay(blob, filename);
         }
-      }
-
-      // ── OVERLAY UI DOWNLOAD ─────────────────────────────────────────
-      function _showOverlay(blob, filename) {
-        var blobUrl = URL.createObjectURL(blob);
-        var overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
-        overlay.innerHTML =
-          '<div style="background:#fff;border-radius:16px;padding:28px 24px;text-align:center;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
-            '<div style="width:60px;height:60px;margin:0 auto 16px;background:linear-gradient(135deg,#e8e8ff,#d0d0ff);border-radius:50%;display:flex;align-items:center;justify-content:center;">' +
-              '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#696cff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
-            '</div>' +
-            '<h5 style="margin:0 0 8px;color:#333;font-size:1.1rem;font-weight:700;">File Siap Diunduh</h5>' +
-            '<p style="color:#697a8d;font-size:0.85rem;margin-bottom:20px;line-height:1.4;">Ketuk tombol di bawah untuk menyimpan file <strong>' + filename + '</strong></p>' +
-            '<a id="_dl_link" href="' + blobUrl + '" download="' + filename + '" ' +
-              'style="display:block;background:linear-gradient(135deg,#696cff,#5f61e6);color:#fff;padding:14px 24px;border-radius:10px;text-decoration:none;font-weight:600;font-size:0.95rem;margin-bottom:12px;">' +
-              '\uD83D\uDCE5 Download ' + filename +
-            '</a>' +
-            '<button id="_dl_close" style="background:none;border:none;color:#697a8d;cursor:pointer;font-size:0.8rem;padding:8px 16px;">Tutup</button>' +
-          '</div>';
-        overlay.querySelector('#_dl_close').addEventListener('click', function() {
-          overlay.remove(); URL.revokeObjectURL(blobUrl);
-        });
-        overlay.addEventListener('click', function(e) {
-          if (e.target === overlay) { overlay.remove(); URL.revokeObjectURL(blobUrl); }
-        });
-        overlay.querySelector('#_dl_link').addEventListener('click', function() {
-          setTimeout(function() { overlay.remove(); setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 5000); }, 1000);
-        });
-        document.body.appendChild(overlay);
       }
 
       // ── EXPORT TABLE TO EXCEL (CSV) ─────────────────────────────────
@@ -327,48 +315,39 @@
       }
 
       // ── GLOBAL DOWNLOAD INTERCEPTOR ─────────────────────────────────
-      // Otomatis menangkap SEMUA download via link.click() di WebView
-      // dan redirect ke _downloadBlob() via navigator.share()
+      // Menangkap SEMUA <a download>.click() di WebView
+      // Blob/data URL → konversi ke data URI → DownloadListener Java
       if (_isWebView()) {
         var _origClick = HTMLAnchorElement.prototype.click;
         HTMLAnchorElement.prototype.click = function() {
           var dl = this.getAttribute('download');
           var href = this.href || '';
+          // Tangkap blob: dan data: download
           if (dl && (href.indexOf('blob:') === 0 || href.indexOf('data:') === 0)) {
             var fname = dl || 'download';
-            console.log('[ExportUtils] Intercepted: ' + fname);
+            console.log('[ExportUtils] Intercepted download: ' + fname);
             if (href.indexOf('blob:') === 0) {
               fetch(href).then(function(r){return r.blob();})
-                .then(function(b){ _downloadBlob(b, fname); })
+                .then(function(b){ _downloadBlobWebView(b, fname); })
                 .catch(function(e){ console.error('[ExportUtils] Blob fetch err:', e); _origClick.call(this); }.bind(this));
             } else {
-              try {
-                var parts = href.split(',');
-                var meta = parts[0]; var raw = parts[1];
-                var mm = meta.match(/data:([^;]+)/);
-                var mime = mm ? mm[1] : 'application/octet-stream';
-                var bs = meta.indexOf('base64') !== -1 ? atob(raw) : decodeURIComponent(raw);
-                var ab = new ArrayBuffer(bs.length);
-                var ia = new Uint8Array(ab);
-                for (var i = 0; i < bs.length; i++) ia[i] = bs.charCodeAt(i);
-                _downloadBlob(new Blob([ab], {type: mime}), fname);
-              } catch(e) { console.error('[ExportUtils] Data URI err:', e); _origClick.call(this); }
+              // data: URI — biarkan DownloadListener Java tangkap langsung
+              _origClick.call(this);
             }
             return;
           }
           _origClick.call(this);
         };
-        console.log('[ExportUtils] Global download interceptor AKTIF (inline)');
+        console.log('[ExportUtils] Global download interceptor AKTIF');
       }
 
       // ── EXPOSE GLOBAL ───────────────────────────────────────────────
       window._downloadBlob = _downloadBlob;
       window._isWebView = _isWebView;
-      window._showManualDownloadLink = _showOverlay;
       window.exportTableToExcel = exportTableToExcel;
       window.exportTableToPDF = exportTableToPDF;
 
-      console.log('[ExportUtils] Inline script loaded OK. WebView=' + _isWebView());
+      console.log('[ExportUtils] Inline v3 loaded. WebView=' + _isWebView());
     })();
     </script>
 
