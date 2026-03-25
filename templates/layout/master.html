@@ -292,39 +292,87 @@
         }
       }
 
-      // ── GLOBAL DOWNLOAD INTERCEPTOR ─────────────────────────────────
-      // Otomatis menangkap SEMUA download via link.click() di WebView
-      // dan redirect ke _downloadBlob() via navigator.share()
+      // ── GLOBAL DOWNLOAD INTERCEPTOR (ULTIMATE) ──────────────────────
+      // Menangkap SEMUA download (blob, data, dan file HTTP seperti .csv/.xlsx)
+      // dan mendelegasikannya ke Android via Base64 Native Bridge.
       if (_isWebView()) {
-        var _origClick = HTMLAnchorElement.prototype.click;
-        HTMLAnchorElement.prototype.click = function() {
-          var dl = this.getAttribute('download');
-          var href = this.href || '';
-          if (dl && (href.indexOf('blob:') === 0 || href.indexOf('data:') === 0)) {
-            var fname = dl || 'download';
-            console.log('[ExportUtils] Intercepted: ' + fname);
-            if (href.indexOf('blob:') === 0) {
-              fetch(href).then(function(r){return r.blob();})
-                .then(function(b){ _downloadBlob(b, fname); })
-                .catch(function(e){ console.error('[ExportUtils] Blob fetch err:', e); _origClick.call(this); }.bind(this));
+        document.addEventListener('click', function(e) {
+          var target = e.target.closest('a');
+          if (!target) return;
+          
+          var href = target.href || '';
+          var dl = target.getAttribute('download');
+          var isFileLink = href.match(/\.(csv|pdf|xlsx?|docx?|zip|png|jpe?g)$/i);
+          
+          // Pengecualian: jangan tangkap link yang bernavigasi normal atau #
+          if (!dl && !isFileLink && href.indexOf('blob:') !== 0 && href.indexOf('data:') !== 0) {
+            return;
+          }
+          
+          // STOP NAVIGASI WEBVIEW BAWAAN (Ini mencegah WebView redirect ke file langsung)
+          e.preventDefault();
+          e.stopPropagation();
+          
+          var fname = dl || href.split('/').pop() || ('download_' + Date.now());
+          if (fname.indexOf('?') > -1) fname = fname.split('?')[0];
+          if (fname.indexOf('#') > -1) fname = fname.split('#')[0];
+          
+          console.log('[ExportUtils] Intercepted link klik:', href.substring(0, 100));
+          
+          // 1. Tangani Data URI
+          if (href.indexOf('data:') === 0) {
+            var pureBase64 = href.split(',')[1];
+            var mimeType = href.split(';')[0].substring(5);
+            if (window.SerpApp && typeof window.SerpApp.saveBase64 === 'function') {
+               window.SerpApp.saveBase64(pureBase64, fname, mimeType);
             } else {
-              try {
-                var parts = href.split(',');
-                var meta = parts[0]; var raw = parts[1];
-                var mm = meta.match(/data:([^;]+)/);
-                var mime = mm ? mm[1] : 'application/octet-stream';
-                var bs = meta.indexOf('base64') !== -1 ? atob(raw) : decodeURIComponent(raw);
-                var ab = new ArrayBuffer(bs.length);
-                var ia = new Uint8Array(ab);
-                for (var i = 0; i < bs.length; i++) ia[i] = bs.charCodeAt(i);
-                _downloadBlob(new Blob([ab], {type: mime}), fname);
-              } catch(e) { console.error('[ExportUtils] Data URI err:', e); _origClick.call(this); }
+               var a = document.createElement('a'); a.href = href; a.download = fname; a.style.display = 'none';
+               document.body.appendChild(a); a.click(); setTimeout(function(){ document.body.removeChild(a); },500);
             }
             return;
           }
-          _origClick.call(this);
-        };
-        console.log('[ExportUtils] Global download interceptor AKTIF (inline)');
+          
+          // 2. Tangani Blob & HTTP File Links via fetch()
+          // Ini mendownload file MENGGUNAKAN sesi web saat ini, lalu meneruskan blob ke native
+          console.log('[ExportUtils] Fetching file untuk native proxy...');
+          
+          // Tampilkan indikator UI ringan
+          var btnOriginalText = target.innerHTML;
+          target.innerHTML = '⏳ Sedang mengunduh...';
+          target.style.opacity = '0.7';
+          target.style.pointerEvents = 'none';
+          
+          fetch(href)
+            .then(function(res) {
+              if (!res.ok) throw new Error('HTTP ' + res.status);
+              var disposition = res.headers.get('content-disposition');
+              if (disposition && disposition.indexOf('filename=') !== -1) {
+                  var matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                  if (matches != null && matches[1]) { 
+                      fname = matches[1].replace(/['"]/g, '');
+                  }
+              }
+              return res.blob();
+            })
+            .then(function(blob) {
+              console.log('[ExportUtils] Fetch selesai, ukuran blob:', blob.size);
+              _downloadBlob(blob, fname); // Akan diarahkan ke _downloadBlobWebView (Base64 -> Java)
+            })
+            .catch(function(err) {
+              console.error('[ExportUtils] Gagal mengunduh URL:', err);
+              alert('Gagal mengunduh file. Percobaan manual akan dilakukan.');
+              window.open(href, '_system'); // Fallback buka di browser luar
+            })
+            .finally(function() {
+              // Kembalikan UI tombol
+              target.innerHTML = btnOriginalText;
+              target.style.opacity = '1';
+              target.style.pointerEvents = 'auto';
+            });
+            
+        }, true);
+        
+        console.log('[ExportUtils] Global download interceptor (Event Listener) AKTIF');
       }
 
       // ── EXPOSE GLOBAL ───────────────────────────────────────────────
