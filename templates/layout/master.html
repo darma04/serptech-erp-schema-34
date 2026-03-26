@@ -119,7 +119,7 @@
         }
       }
 
-      function _sendToSerpApp(pureBase64, fname, mimeType) {
+      function _sendToSerpApp(pureBase64, fname, mimeType, onComplete) {
          if (!window.SerpApp) return false;
          if (window.SerpApp.saveBase64Chunk) {
              console.log('[ExportUtils] Mengirim file besar via Async Chunking ke Android...');
@@ -132,13 +132,28 @@
                      setTimeout(sendNext, 5); // jeda 5ms untuk flush buffer Binder Android
                  } else {
                      window.SerpApp.finishBase64Chunk(fname, mimeType);
+                     if (onComplete) onComplete();
                  }
              }
              sendNext();
          } else if (window.SerpApp.saveBase64) {
              window.SerpApp.saveBase64(pureBase64, fname, mimeType);
+             if (onComplete) onComplete();
          }
          return true;
+      }
+
+      // ── MENCEGAH PENGHANCURAN BLOB SEBELUM FETCH SELESAI (PDF FIX) ──
+      // Menunda pemusnahan URL blob hingga pengiriman ke Android benar-benar selesai
+      window._pendingRevokes = window._pendingRevokes || {};
+      window._origRevoke = (window.URL || window.webkitURL).revokeObjectURL;
+      if (window._origRevoke) {
+         (window.URL || window.webkitURL).revokeObjectURL = function(url) {
+             if (window._pendingRevokes[url]) {
+                 return; // Pembatalan ditunda karena file sedang ditarik ke Java!
+             }
+             try { window._origRevoke.call(window.URL, url); } catch(e){}
+         };
       }
 
       // ── INTERCEPTOR SILENT DOWNLOAD (DataTables dll) ────────────────
@@ -160,14 +175,24 @@
                   return;
               }
 
-              console.log('[ExportUtils] Virtual A click intercepted for blob:', this.href);
-              fetch(this.href)
+              var blobUrl = this.href;
+              window._pendingRevokes[blobUrl] = true; // Tandai agar jangan dihapus oleh DataTables
+              console.log('[ExportUtils] Virtual A click intercepted for blob:', blobUrl);
+              
+              fetch(blobUrl)
                 .then(function(res) { return res.blob(); })
                 .then(function(blob) {
-                  _downloadBlobWebView(blob, fname);
+                  _downloadBlobWebView(blob, fname, function() {
+                      // Callback: Ekstraksi tuntas, sekarang boleh dhancurkan dari RAM
+                      if (window._pendingRevokes[blobUrl]) {
+                          try { window._origRevoke.call(window.URL, blobUrl); } catch(e){}
+                          delete window._pendingRevokes[blobUrl];
+                      }
+                  });
                 })
                 .catch(function(err) {
                   console.error('Blob fetch error', err);
+                  delete window._pendingRevokes[blobUrl];
                 });
               return; 
             }
@@ -178,7 +203,7 @@
       };
 
       // ── WEBVIEW DOWNLOAD (Ultimate Murni Native Bridge) ──
-      function _downloadBlobWebView(blob, filename) {
+      function _downloadBlobWebView(blob, filename, onComplete) {
         var reader = new FileReader();
         reader.onloadend = function() {
           var base64data = reader.result;
@@ -186,7 +211,7 @@
           var pureBase64 = base64data.split(',')[1];
           
           if (window.SerpApp) {
-            _sendToSerpApp(pureBase64 || '', filename, blob.type || 'application/octet-stream');
+            _sendToSerpApp(pureBase64 || '', filename, blob.type || 'application/octet-stream', onComplete);
           } else {
             console.log('[ExportUtils] Fallback: Memicu Download Listener standar');
             var a = document.createElement('a');
@@ -195,7 +220,10 @@
             a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
-            setTimeout(function() { document.body.removeChild(a); }, 1000);
+            setTimeout(function() { 
+                document.body.removeChild(a); 
+                if (onComplete) onComplete(); 
+            }, 1000);
           }
         };
         reader.readAsDataURL(blob);
