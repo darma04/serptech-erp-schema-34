@@ -119,117 +119,120 @@
         }
       }
 
-      function _sendToSerpApp(pureBase64, fname, mimeType, onComplete) {
+      // ═══════════════════════════════════════════════════════════════
+      // METODE DEFINITIF: PROTOTYPE-LEVEL INTERCEPT
+      // Pendekatan createElement GAGAL karena pdfmake/FileSaver sudah
+      // meng-cache referensi document.createElement SEBELUM script ini.
+      // Solusi: Override HTMLAnchorElement.prototype.click (TIDAK BISA
+      // dibypass oleh library APAPUN) + Cache blob via createObjectURL.
+      // ═══════════════════════════════════════════════════════════════
+
+      // ── 1. SIMPAN SALINAN BLOB SAAT createObjectURL DIPANGGIL ──────
+      // Ini memastikan kita punya akses ke data asli blob bahkan jika
+      // revokeObjectURL sudah dipanggil oleh pdfmake/FileSaver.
+      var _blobStore = {};
+      var _origCreateObjectURL = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = function(blob) {
+          var url = _origCreateObjectURL(blob);
+          if (blob instanceof Blob) {
+              _blobStore[url] = blob; // Simpan referensi blob
+              console.log('[ExportUtils] Blob tersimpan:', url, 'size:', blob.size, 'type:', blob.type);
+          }
+          return url;
+      };
+
+      // ── 2. TUNDA revokeObjectURL SAMPAI PROSES SELESAI ─────────────
+      var _origRevokeObjectURL = URL.revokeObjectURL.bind(URL);
+      URL.revokeObjectURL = function(url) {
+          if (_blobStore[url]) {
+              // Blob ini mungkin sedang diproses, tunda pembersihan 60 detik
+              setTimeout(function() {
+                  delete _blobStore[url];
+                  try { _origRevokeObjectURL(url); } catch(e){}
+              }, 60000);
+              return;
+          }
+          try { _origRevokeObjectURL(url); } catch(e){}
+      };
+
+      // ── 3. KIRIM KE ANDROID VIA NATIVE BRIDGE (CHUNKING) ──────────
+      function _sendToSerpApp(pureBase64, fname, mimeType) {
          if (!window.SerpApp) return false;
          if (window.SerpApp.saveBase64Chunk) {
-             console.log('[ExportUtils] Mengirim file besar via Async Chunking ke Android...');
-             var chunkSize = 65536; // 64KB per chunk (Mencegah IPC Binder Overflow)
+             console.log('[ExportUtils] Mengirim via Async Chunking:', fname, '(' + pureBase64.length + ' chars)');
+             var chunkSize = 65536; // 64KB per chunk
              var i = 0;
              function sendNext() {
                  if (i < pureBase64.length) {
                      window.SerpApp.saveBase64Chunk(pureBase64.substring(i, i + chunkSize));
                      i += chunkSize;
-                     setTimeout(sendNext, 5); // jeda 5ms untuk flush buffer Binder Android
+                     setTimeout(sendNext, 5);
                  } else {
                      window.SerpApp.finishBase64Chunk(fname, mimeType);
-                     if (onComplete) onComplete();
                  }
              }
              sendNext();
          } else if (window.SerpApp.saveBase64) {
              window.SerpApp.saveBase64(pureBase64, fname, mimeType);
-             if (onComplete) onComplete();
          }
          return true;
       }
 
-      // ── MENCEGAH PENGHANCURAN BLOB SEBELUM FETCH SELESAI (PDF FIX) ──
-      // Menunda pemusnahan URL blob hingga pengiriman ke Android benar-benar selesai
-      window._pendingRevokes = window._pendingRevokes || {};
-      window._origRevoke = (window.URL || window.webkitURL).revokeObjectURL;
-      if (window._origRevoke) {
-         (window.URL || window.webkitURL).revokeObjectURL = function(url) {
-             if (window._pendingRevokes[url]) {
-                 return; // Pembatalan ditunda karena file sedang ditarik ke Java!
-             }
-             try { window._origRevoke.call(window.URL, url); } catch(e){}
-         };
+      // ── 4. KONVERSI BLOB KE BASE64 DAN KIRIM ──────────────────────
+      function _blobToNative(blob, filename) {
+          var reader = new FileReader();
+          reader.onloadend = function() {
+              var base64data = reader.result;
+              var pureBase64 = base64data.split(',')[1];
+              if (pureBase64) {
+                  _sendToSerpApp(pureBase64, filename, blob.type || 'application/octet-stream');
+              }
+          };
+          reader.readAsDataURL(blob);
       }
 
-      // ── INTERCEPTOR SILENT DOWNLOAD (DataTables dll) ────────────────
-      // Menangkap pembuatan <a> tag virtual yang tidak disentuh DOM
-      var _origCreateElement = document.createElement;
-      document.createElement = function(tagName) {
-        var el = _origCreateElement.call(document, tagName);
-        if (tagName.toLowerCase() === 'a') {
-          var _origClick = el.click;
-          el.click = function() {
-            var isWebView = _isWebView();
-            if (isWebView && this.href && (this.href.indexOf('blob:') === 0 || this.href.indexOf('data:') === 0)) {
-              var fname = this.getAttribute('download') || 'Exported_File';
-              
+      // ── 5. PROTOTYPE-LEVEL INTERCEPT (ANTI-BYPASS MUTLAK) ─────────
+      // Override HTMLAnchorElement.prototype.click — ini adalah metode
+      // yang dipanggil oleh SETIAP elemen <a>, termasuk yang dibuat oleh
+      // pdfmake/FileSaver walaupun mereka cache createElement sendiri.
+      var _origAnchorClick = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function() {
+          if (_isWebView() && this.href) {
+              // Tangkap blob: URL
+              if (this.href.indexOf('blob:') === 0) {
+                  var fname = this.getAttribute('download') || this.download || 'Exported_File';
+                  var blobUrl = this.href;
+                  var cachedBlob = _blobStore[blobUrl];
+                  
+                  console.log('[ExportUtils] PROTOTYPE intercept blob:', blobUrl, 'cached:', !!cachedBlob);
+                  
+                  if (cachedBlob) {
+                      // JALUR UTAMA: Gunakan blob yang sudah di-cache (PALING CEPAT & AMAN)
+                      _blobToNative(cachedBlob, fname);
+                  } else {
+                      // JALUR CADANGAN: Fetch blob dari URL (jika tidak ada di cache)
+                      fetch(blobUrl)
+                          .then(function(res) { return res.blob(); })
+                          .then(function(blob) { _blobToNative(blob, fname); })
+                          .catch(function(err) { console.error('[ExportUtils] Blob fetch gagal:', err); });
+                  }
+                  return; // Hentikan click asli agar WebView tidak bingung
+              }
+              // Tangkap data: URL
               if (this.href.indexOf('data:') === 0) {
+                  var fname2 = this.getAttribute('download') || this.download || 'Exported_File';
                   var pureBase64 = this.href.split(',')[1];
                   var mimeType = this.href.split(';')[0].substring(5);
-                  _sendToSerpApp(pureBase64, fname, mimeType);
+                  console.log('[ExportUtils] PROTOTYPE intercept data:', fname2);
+                  _sendToSerpApp(pureBase64, fname2, mimeType);
                   return;
               }
-
-              var blobUrl = this.href;
-              window._pendingRevokes[blobUrl] = true; // Tandai agar jangan dihapus oleh DataTables
-              console.log('[ExportUtils] Virtual A click intercepted for blob:', blobUrl);
-              
-              fetch(blobUrl)
-                .then(function(res) { return res.blob(); })
-                .then(function(blob) {
-                  _downloadBlobWebView(blob, fname, function() {
-                      // Callback: Ekstraksi tuntas, sekarang boleh dhancurkan dari RAM
-                      if (window._pendingRevokes[blobUrl]) {
-                          try { window._origRevoke.call(window.URL, blobUrl); } catch(e){}
-                          delete window._pendingRevokes[blobUrl];
-                      }
-                  });
-                })
-                .catch(function(err) {
-                  console.error('Blob fetch error', err);
-                  delete window._pendingRevokes[blobUrl];
-                });
-              return; 
-            }
-            _origClick.apply(this, arguments);
-          };
-        }
-        return el;
+          }
+          // Untuk semua kasus lain, jalankan click asli
+          return _origAnchorClick.apply(this, arguments);
       };
 
-      // ── WEBVIEW DOWNLOAD (Ultimate Murni Native Bridge) ──
-      function _downloadBlobWebView(blob, filename, onComplete) {
-        var reader = new FileReader();
-        reader.onloadend = function() {
-          var base64data = reader.result;
-          // Ekstrak string base64 asli dengan memotong header data uri
-          var pureBase64 = base64data.split(',')[1];
-          
-          if (window.SerpApp) {
-            _sendToSerpApp(pureBase64 || '', filename, blob.type || 'application/octet-stream', onComplete);
-          } else {
-            console.log('[ExportUtils] Fallback: Memicu Download Listener standar');
-            var a = document.createElement('a');
-            a.href = base64data;
-            a.download = filename;
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(function() { 
-                document.body.removeChild(a); 
-                if (onComplete) onComplete(); 
-            }, 1000);
-          }
-        };
-        reader.readAsDataURL(blob);
-      }
-
-      // ── BROWSER DOWNLOAD (standar) ──────────────────────────────────
+      // ── 6. BROWSER DOWNLOAD (Jalur non-WebView) ───────────────────
       function _downloadBlobBrowser(blob, filename) {
         try {
           var url = URL.createObjectURL(blob);
@@ -238,10 +241,11 @@
           a.download = filename;
           a.style.display = 'none';
           document.body.appendChild(a);
-          a.click();
+          _origAnchorClick.call(a); // Gunakan click asli untuk browser
           setTimeout(function() {
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            _origRevokeObjectURL(url);
+            delete _blobStore[url]; // Bersihkan cache
           }, 300);
         } catch (e) {
           console.error('[ExportUtils] Browser download gagal:', e);
