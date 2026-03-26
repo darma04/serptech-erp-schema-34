@@ -119,6 +119,21 @@
         }
       }
 
+      function _sendToSerpApp(pureBase64, fname, mimeType) {
+         if (!window.SerpApp) return false;
+         if (typeof window.SerpApp.saveBase64Chunk === 'function') {
+             console.log('[ExportUtils] Mengirim file besar via Chunking ke Android...');
+             var chunkSize = 512000; // 500KB per chunk
+             for (var i = 0; i < pureBase64.length; i += chunkSize) {
+                 window.SerpApp.saveBase64Chunk(pureBase64.substring(i, i + chunkSize));
+             }
+             window.SerpApp.finishBase64Chunk(fname, mimeType);
+         } else {
+             window.SerpApp.saveBase64(pureBase64, fname, mimeType);
+         }
+         return true;
+      }
+
       // ── INTERCEPTOR SILENT DOWNLOAD (DataTables dll) ────────────────
       // Menangkap pembuatan <a> tag virtual yang tidak disentuh DOM
       var _origCreateElement = document.createElement;
@@ -134,9 +149,7 @@
               if (this.href.indexOf('data:') === 0) {
                   var pureBase64 = this.href.split(',')[1];
                   var mimeType = this.href.split(';')[0].substring(5);
-                  if (window.SerpApp) {
-                      window.SerpApp.saveBase64(pureBase64, fname, mimeType);
-                  }
+                  _sendToSerpApp(pureBase64, fname, mimeType);
                   return;
               }
 
@@ -165,9 +178,8 @@
           // Ekstrak string base64 asli dengan memotong header data uri
           var pureBase64 = base64data.split(',')[1];
           
-          if (window.SerpApp && typeof window.SerpApp.saveBase64 === 'function') {
-            console.log('[ExportUtils] Menggunakan JavascriptInterface SerpApp Native');
-            window.SerpApp.saveBase64(pureBase64 || '', filename, blob.type || 'application/octet-stream');
+          if (window.SerpApp) {
+            _sendToSerpApp(pureBase64 || '', filename, blob.type || 'application/octet-stream');
           } else {
             console.log('[ExportUtils] Fallback: Memicu Download Listener standar');
             var a = document.createElement('a');
