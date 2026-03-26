@@ -74,40 +74,7 @@
           <!-- /Search -->
           {% endif %}
 
-          <!-- Language -->
-          <li class="nav-item dropdown-language dropdown">
-            <a class="nav-link btn btn-text-secondary rounded-pill btn-icon dropdown-toggle hide-arrow"
-              href="javascript:void(0);" data-bs-toggle="dropdown">
-              <i class='ri-translate-2 ri-22px'></i>
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end">
-              <li>
-                <a class="dropdown-item {% if LANGUAGE_CODE == 'en' %}active{% endif %}"
-                  href="{% current_url request %}" data-language="en" data-text-direction="ltr">
-                  <span class="align-middle">{% trans "English"%}</span>
-                </a>
-              </li>
-              <li>
-                <a class="dropdown-item {% if LANGUAGE_CODE == 'fr' %}active{% endif %}"
-                  href="{% current_url request %}" data-language="fr" data-text-direction="ltr">
-                  <span class="align-middle">{% trans "French"%}</span>
-                </a>
-              </li>
-              <li>
-                <a class="dropdown-item {% if LANGUAGE_CODE == 'ar' %}active{% endif %}"
-                  href="{% current_url request %}" data-language="ar" data-text-direction="rtl">
-                  <span class="align-middle">{% trans "Arabic"%}</span>
-                </a>
-              </li>
-              <li>
-                <a class="dropdown-item {% if LANGUAGE_CODE == 'de' %}active{% endif %}"
-                  href="{% current_url request %}" data-language="de" data-text-direction="ltr">
-                  <span class="align-middle">{% trans "German"%}</span>
-                </a>
-              </li>
-            </ul>
-          </li>
-          <!--/ Language -->
+
 
           {% if has_customizer %}
           <!-- Style Switcher -->
@@ -202,89 +169,6 @@
           <!-- /Dashboard Date Filter Icon -->
           {% endif %}
 
-          <!-- Quick links  -->
-          <div class="navbar-nav align-items-center">
-            <div class="nav-item dropdown-shortcuts navbar-dropdown dropdown me-1 me-xl-0">
-              <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown"
-                data-bs-auto-close="outside" aria-expanded="false">
-                <i class='ri-star-smile-line ri-22px'></i>
-              </a>
-              <div class="dropdown-menu dropdown-menu-end py-0">
-                <div class="dropdown-menu-header border-bottom">
-                  <div class="dropdown-header d-flex align-items-center py-3">
-                    <h5 class="text-body mb-0 me-auto">Shortcuts</h5>
-                    <a href="javascript:void(0)" class="dropdown-shortcuts-add text-body" data-bs-toggle="tooltip"
-                      data-bs-placement="top" title="Add shortcuts"><i class="ri-add-line ri-24px"></i></a>
-                  </div>
-                </div>
-                <div class="dropdown-shortcuts-list scrollable-container">
-                  <div class="row row-bordered overflow-visible g-0">
-                    <!--
-                      <div class="col-12 col-lg-6 shortcut-item">
-                        <span class="shortcut-media avatar rounded-circle shadow-none">
-                          <i class="ri-calendar-line ri-26px text-heading"></i>
-                        </span>
-                        <a href="#!" class="stretched-link">Calendar</a>
-                      </div>
-                      <div class="col-12 col-lg-6 shortcut-item">
-                        <span class="shortcut-media avatar rounded-circle shadow-none">
-                          <i class="ri-bill-line ri-26px text-heading"></i>
-                        </span>
-                        <a href="#!" class="stretched-link">Invoice App</a>
-                      </div>
-                      -->
-                    <div class="dropdown-shortcuts-item col">
-                      <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                        <i class="ri-user-line ri-26px text-heading"></i>
-                      </span>
-                      <a href="{% url 'user_management:index' %}" class="stretched-link">User App</a>
-                      <small class="mb-0">Manage Users</small>
-                    </div>
-                    <div class="dropdown-shortcuts-item col">
-                      <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                        <i class="ri-shield-user-line ri-26px text-heading"></i>
-                      </span>
-                      <a href="{% url 'permission_management:role_list' %}" class="stretched-link">Role Management</a>
-                      <small class="mb-0">Manage Roles</small>
-                    </div>
-                  </div>
-                  <div class="row row-bordered overflow-visible g-0">
-                    <div class="dropdown-shortcuts-item col">
-                      <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                        <i class="ri-pie-chart-2-line ri-26px text-heading"></i>
-                      </span>
-                      <a href="{% url 'dashboard:index' %}" class="stretched-link">Dashboard</a>
-                      <small class="mb-0">User Profile</small>
-                    </div>
-                    <div class="dropdown-shortcuts-item col">
-                      <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                        <i class="ri-settings-4-line ri-26px text-heading"></i>
-                      </span>
-                      <a href="{% url 'pengaturan:profil' %}" class="stretched-link">Setting</a>
-                      <small class="mb-0">Account Settings</small>
-                    </div>
-                  </div>
-                  <div class="row row-bordered overflow-visible g-0">
-                    <div class="dropdown-shortcuts-item col">
-                      <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                        <i class="ri-shopping-cart-2-line ri-26px text-heading"></i>
-                      </span>
-                      <a href="{% url 'pos:index' %}" class="stretched-link">POS</a>
-                      <small class="mb-0">Point of Sale</small>
-                    </div>
-                    <div class="dropdown-shortcuts-item col">
-                      <span class="dropdown-shortcuts-icon rounded-circle mb-3">
-                        <i class="ri-building-4-line ri-26px text-heading"></i>
-                      </span>
-                      <a href="{% url 'pengaturan:perusahaan' %}" class="stretched-link">Pengaturan Perusahaan</a>
-                      <small class="mb-0">Company Settings</small>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- Quick links -->
           {% endif %}
           <!-- Notification removed - not implemented -->
 
