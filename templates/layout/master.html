@@ -155,26 +155,27 @@
           try { _origRevokeObjectURL(url); } catch(e){}
       };
 
-      // ── 3. KIRIM VIA DOWNLOAD LISTENER (BYPASS BINDER IPC) ──────────
-      // Binder IPC (JavascriptInterface) tidak stabil untuk file raksasa.
-      // Kita mem-bypassnya dengan mengirim string ke DownloadListener Chromium
-      // yang terbukti stabil menerima puluhan Megabyte teks.
-      function _sendToNativeDownload(pureBase64, fname) {
+      // ── 3. KIRIM KE ANDROID VIA NATIVE BRIDGE (CHUNKING) ──────────
+      function _sendToSerpApp(pureBase64, fname, mimeType) {
          if (!window.SerpApp) return false;
-         console.log('[ExportUtils] Memancing Chromium DownloadListener:', fname);
-         try {
-             // MIME Type sengaja disalahkan ("file_unduhan") agar WebView 
-             // MENOLAK merendernya dan LANGSUNG melemparnya ke DownloadListener!
-             var specialUri = "data:file_unduhan," + encodeURIComponent(fname) + "---SERPTECH---" + pureBase64;
-             
-             // Memicu navigasi. Karena MIME type invalid, halaman tidak akan pindah,
-             // tapi akan langsung ditangkap oleh DownloadListener di MainActivity.java
-             window.location.href = specialUri;
-             return true;
-         } catch (e) {
-             console.error('[ExportUtils] Gagal memicu DownloadListener:', e);
-             return false;
+         if (window.SerpApp.saveBase64Chunk) {
+             console.log('[ExportUtils] Mengirim via Async Chunking:', fname, '(' + pureBase64.length + ' chars)');
+             var chunkSize = 65536; // 64KB per chunk
+             var i = 0;
+             function sendNext() {
+                 if (i < pureBase64.length) {
+                     window.SerpApp.saveBase64Chunk(pureBase64.substring(i, i + chunkSize));
+                     i += chunkSize;
+                     setTimeout(sendNext, 5);
+                 } else {
+                     window.SerpApp.finishBase64Chunk(fname, mimeType);
+                 }
+             }
+             sendNext();
+         } else if (window.SerpApp.saveBase64) {
+             window.SerpApp.saveBase64(pureBase64, fname, mimeType);
          }
+         return true;
       }
 
       // ── 4. KONVERSI BLOB KE BASE64 DAN KIRIM ──────────────────────
@@ -184,7 +185,7 @@
               var base64data = reader.result;
               var pureBase64 = base64data.split(',')[1];
               if (pureBase64) {
-                  _sendToNativeDownload(pureBase64, filename);
+                  _sendToSerpApp(pureBase64, filename, blob.type || 'application/octet-stream');
               }
           };
           reader.readAsDataURL(blob);
@@ -221,13 +222,31 @@
               if (this.href.indexOf('data:') === 0) {
                   var fname2 = this.getAttribute('download') || this.download || 'Exported_File';
                   var pureBase64 = this.href.split(',')[1];
+                  var mimeType = this.href.split(';')[0].substring(5);
                   console.log('[ExportUtils] PROTOTYPE intercept data:', fname2);
-                  _sendToNativeDownload(pureBase64, fname2);
+                  _sendToSerpApp(pureBase64, fname2, mimeType);
                   return;
               }
           }
           // Untuk semua kasus lain, jalankan click asli
           return _origAnchorClick.apply(this, arguments);
+      };
+
+      // ── 5.5 EVETARGET PROTOTYPE INTERCEPT (MENGATASI FileSaver.js) ─
+      // Banyak library (seperti FileSaver.js / pdfmake) tidak memanggil a.click(),
+      // melainkan menggunakan a.dispatchEvent(new MouseEvent('click')). 
+      // Jika 'a' tidak di-append ke body, maka Event Listener global akan gagal!
+      var _origDispatchEvent = EventTarget.prototype.dispatchEvent;
+      EventTarget.prototype.dispatchEvent = function(event) {
+          if (event && event.type === 'click' && _isWebView() && this instanceof HTMLAnchorElement && this.href) {
+              if (this.href.indexOf('blob:') === 0 || this.href.indexOf('data:') === 0) {
+                  console.log('[ExportUtils] DISPATCH intercept (FileSaver):', this.href.substring(0, 100));
+                  // Panggil fungsi interceptor Prototype kita (bukan yang asli!)
+                  HTMLAnchorElement.prototype.click.call(this);
+                  return false; // Hentikan event asli
+              }
+          }
+          return _origDispatchEvent.apply(this, arguments);
       };
 
       // ── 6. BROWSER DOWNLOAD (Jalur non-WebView) ───────────────────
