@@ -35,7 +35,7 @@
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Penjualan</p>
-                            <h4 class="mb-0 text-success" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>╬ú total_harga Sales Order (confirmed/delivered/completed) + ╬ú total_harga POS (paid).<br><br><b>Sumber:</b> Tabel SalesOrder + POSTransaction.<br>Mendukung filter tanggal.">{{ total_penjualan|rupiah }}</h4>
+                            <h4 class="mb-0 text-success summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>╬ú total_harga Sales Order (confirmed/delivered/completed) + ╬ú total_harga POS (paid).<br><br><b>Sumber:</b> Tabel SalesOrder + POSTransaction.<br>Mendukung filter tanggal.">{{ total_penjualan|rupiah }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-success rounded p-2">
@@ -52,7 +52,7 @@
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Keuntungan</p>
-                            <h4 class="mb-0 {% if total_keuntungan >= 0 %}text-success{% else %}text-danger{% endif %}" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>╬ú (harga_jual ÔêÆ harga_beli) ├ù qty per item yang terjual.<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Keuntungan kotor dari semua barang terjual.">{{ total_keuntungan|rupiah }}</h4>
+                            <h4 class="mb-0 {% if total_keuntungan >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>╬ú (harga_jual ÔêÆ harga_beli) ├ù qty per item yang terjual.<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Keuntungan kotor dari semua barang terjual.">{{ total_keuntungan|rupiah }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-primary rounded p-2">
@@ -69,7 +69,7 @@
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Harga Beli</p>
-                            <h4 class="mb-0 text-info" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>╬ú (harga_beli ├ù qty) per item yang terjual.<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Total modal dari barang yang sudah terjual.">{{ total_harga_beli|rupiah }}</h4>
+                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>╬ú (harga_beli ├ù qty) per item yang terjual.<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Total modal dari barang yang sudah terjual.">{{ total_harga_beli|rupiah }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-info rounded p-2">
@@ -86,7 +86,7 @@
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Rata-rata Order</p>
-                            <h4 class="mb-0 text-warning" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Total Penjualan ├À Jumlah Transaksi.<br><br><b>Sumber:</b> (SalesOrder + POS total) / (SO count + POS count).<br>Rata-rata nilai per transaksi.">{{ rata_rata_order|rupiah }}</h4>
+                            <h4 class="mb-0 text-warning summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Total Penjualan ├À Jumlah Transaksi.<br><br><b>Sumber:</b> (SalesOrder + POS total) / (SO count + POS count).<br>Rata-rata nilai per transaksi.">{{ rata_rata_order|rupiah }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-warning rounded p-2">
@@ -839,5 +839,54 @@
             new bootstrap.Tooltip(el, { trigger: 'hover focus click' });
         });
     });
-</script>
+</script><style>
+@media (max-width: 575.98px) {
+    .summary-nominal {
+        font-size: 10px !important;
+        white-space: nowrap;
+    }
+    .card-info .card-text {
+        font-size: 0.68rem;
+        margin-bottom: 0.15rem !important;
+        line-height: 1.2;
+    }
+    .card-info small {
+        font-size: 0.6rem;
+    }
+    .card-body {
+        padding: 0.5rem 0.6rem !important;
+    }
+    .card-icon .badge {
+        padding: 0.25rem !important;
+    }
+    .card-icon .ri-24px {
+        font-size: 14px !important;
+    }
+    .card-info {
+        max-width: calc(100% - 32px);
+    }
+}
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .summary-nominal {
+        font-size: 0.9rem !important;
+    }
+    .card-info .card-text {
+        font-size: 0.72rem;
+    }
+    .card-info small {
+        font-size: 0.62rem;
+    }
+    .card-body {
+        padding: 0.6rem 0.75rem !important;
+    }
+    .card-icon .ri-24px {
+        font-size: 16px !important;
+    }
+}
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .summary-nominal {
+        font-size: 1.05rem !important;
+    }
+}
+</style>
 {% endblock page_js %}

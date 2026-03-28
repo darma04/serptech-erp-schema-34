@@ -41,7 +41,7 @@ Filter: gudang, kategori. Export Excel & PDF.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Produk</p>
-                            <h4 class="mb-0" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Jumlah produk unik yang memiliki entri stok di gudang.<br><br><b>Sumber:</b> Tabel Stok (relasi Produk ├ù Gudang).">{{ total_produk }}</h4>
+                            <h4 class="mb-0 summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Jumlah produk unik yang memiliki entri stok di gudang.<br><br><b>Sumber:</b> Tabel Stok (relasi Produk ├ù Gudang).">{{ total_produk }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-primary rounded p-2">
@@ -58,7 +58,7 @@ Filter: gudang, kategori. Export Excel & PDF.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Gudang</p>
-                            <h4 class="mb-0" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Jumlah gudang aktif dalam sistem.<br><br><b>Sumber:</b> Tabel Gudang.">{{ total_gudang }}</h4>
+                            <h4 class="mb-0 summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Jumlah gudang aktif dalam sistem.<br><br><b>Sumber:</b> Tabel Gudang.">{{ total_gudang }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-info rounded p-2">
@@ -75,7 +75,7 @@ Filter: gudang, kategori. Export Excel & PDF.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Stok Habis</p>
-                            <h4 class="mb-0 text-danger" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Jumlah entri stok dengan jumlah = 0.<br><br><b>Sumber:</b> Tabel Stok dimana jumlah = 0.">{{ stok_habis }}</h4>
+                            <h4 class="mb-0 text-danger summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Jumlah entri stok dengan jumlah = 0.<br><br><b>Sumber:</b> Tabel Stok dimana jumlah = 0.">{{ stok_habis }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-danger rounded p-2">
@@ -92,7 +92,7 @@ Filter: gudang, kategori. Export Excel & PDF.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Stok Rendah</p>
-                            <h4 class="mb-0 text-warning" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Jumlah entri stok dengan jumlah > 0 dan Ôëñ 10.<br><br><b>Sumber:</b> Tabel Stok dimana 0 < jumlah Ôëñ 10.">{{ stok_rendah }}</h4>
+                            <h4 class="mb-0 text-warning summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Jumlah entri stok dengan jumlah > 0 dan ≤ 10.<br><br><b>Sumber:</b> Tabel Stok dimana 0 < jumlah ≤ 10.">{{ stok_rendah }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-warning rounded p-2">
@@ -633,5 +633,54 @@ Filter: gudang, kategori. Export Excel & PDF.
             new bootstrap.Tooltip(el, { trigger: 'hover focus click' });
         });
     });
-</script>
+</script><style>
+@media (max-width: 575.98px) {
+    .summary-nominal {
+        font-size: 10px !important;
+        white-space: nowrap;
+    }
+    .card-info .card-text {
+        font-size: 0.68rem;
+        margin-bottom: 0.15rem !important;
+        line-height: 1.2;
+    }
+    .card-info small {
+        font-size: 0.6rem;
+    }
+    .card-body {
+        padding: 0.5rem 0.6rem !important;
+    }
+    .card-icon .badge {
+        padding: 0.25rem !important;
+    }
+    .card-icon .ri-24px {
+        font-size: 14px !important;
+    }
+    .card-info {
+        max-width: calc(100% - 32px);
+    }
+}
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .summary-nominal {
+        font-size: 0.9rem !important;
+    }
+    .card-info .card-text {
+        font-size: 0.72rem;
+    }
+    .card-info small {
+        font-size: 0.62rem;
+    }
+    .card-body {
+        padding: 0.6rem 0.75rem !important;
+    }
+    .card-icon .ri-24px {
+        font-size: 16px !important;
+    }
+}
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .summary-nominal {
+        font-size: 1.05rem !important;
+    }
+}
+</style>
 {% endblock page_js %}
