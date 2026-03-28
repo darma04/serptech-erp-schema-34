@@ -1,0 +1,444 @@
+﻿{% extends 'layout/layout_vertical.html' %}
+{% comment %}
+==========================================================================
+   AI DASHBOARD - Halaman Analytics AI dengan Health Score, Prediksi, Anomali
+==========================================================================
+{% endcomment %}
+{% load static %}
+
+{% block title %}AI Dashboard{% endblock title %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <h4 class="py-3 mb-4">
+        <span class="text-muted fw-light">AI /</span> Dashboard Analytics
+    </h4>
+
+    {% if dashboard_error %}
+    <div class="alert alert-danger">
+        <i class="ri-error-warning-line me-2"></i>Error memuat data: {{ dashboard_error }}
+    </div>
+    {% endif %}
+
+    <!-- Row 1: Health Score + Key Metrics -->
+    <div class="row mb-4">
+        <!-- Health Score Widget -->
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-title mb-3">
+                        <i class="ri-heart-pulse-line me-1"></i>Skor Kesehatan Bisnis
+                    </h6>
+                    <div class="position-relative d-inline-block mb-3">
+                        <canvas id="healthChart" width="180" height="180"></canvas>
+                        <div class="position-absolute top-50 start-50 translate-middle text-center">
+                            <h2 class="mb-0 fw-bold" style="color: {{ health_color }};">{{ health_score }}</h2>
+                            <small class="text-muted">/ 100</small>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge rounded-pill px-3 py-2" style="background-color: {{ health_color }}; font-size: 0.85rem;">
+                            {{ health_level }}
+                        </span>
+                    </div>
+                    <div class="mt-3 text-start small text-muted">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="ri-line-chart-line me-1"></i>Revenue Growth</span>
+                            <span class="fw-semibold {% if rev_growth >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ rev_growth }}%
+                            </span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="ri-money-dollar-circle-line me-1"></i>Rata-rata Margin</span>
+                            <span class="fw-semibold">{{ avg_margin }}%</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="ri-archive-line me-1"></i>Stok Sehat</span>
+                            <span class="fw-semibold">{{ stok_sehat }}/{{ total_produk }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span><i class="ri-exchange-dollar-line me-1"></i>Rasio Biaya</span>
+                            <span class="fw-semibold {% if biaya_ratio > 60 %}text-danger{% elif biaya_ratio > 40 %}text-warning{% else %}text-success{% endif %}">
+                                {{ biaya_ratio }}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Metrics Cards -->
+        <div class="col-lg-8 col-md-6">
+            <div class="row">
+                <!-- Revenue Bulan Ini -->
+                <div class="col-sm-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-primary">
+                                        <i class="ri-money-dollar-circle-line ri-24px"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="d-block text-muted small">Revenue Bulan Ini</span>
+                                    <h5 class="mb-0 fw-bold">Rp {{ rev_now|floatformat:0 }}</h5>
+                                    <small class="{% if rev_growth >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        <i class="ri-arrow-{% if rev_growth >= 0 %}up{% else %}down{% endif %}-s-line"></i>
+                                        {{ rev_growth }}% dari bulan lalu
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profit -->
+                <div class="col-sm-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-success">
+                                        <i class="ri-line-chart-line ri-24px"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="d-block text-muted small">Estimasi Profit</span>
+                                    <h5 class="mb-0 fw-bold {% if profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        Rp {{ profit|floatformat:0 }}
+                                    </h5>
+                                    <small class="text-muted">Revenue - Biaya</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total Transaksi -->
+                <div class="col-sm-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-info">
+                                        <i class="ri-shopping-cart-line ri-24px"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="d-block text-muted small">Total Transaksi</span>
+                                    <h5 class="mb-0 fw-bold">{{ total_trx }}</h5>
+                                    <small class="text-muted">Bulan ini (SO + POS)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Biaya Operasional -->
+                <div class="col-sm-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar flex-shrink-0">
+                                    <span class="avatar-initial rounded bg-label-warning">
+                                        <i class="ri-wallet-line ri-24px"></i>
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="d-block text-muted small">Biaya Operasional</span>
+                                    <h5 class="mb-0 fw-bold">Rp {{ biaya_now|floatformat:0 }}</h5>
+                                    <small class="text-muted">{{ biaya_ratio }}% dari revenue</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Revenue Trend Chart + Stock Health -->
+    <div class="row mb-4">
+        <!-- Revenue Trend Chart -->
+        <div class="col-lg-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-bar-chart-box-line me-2"></i>Tren Revenue 6 Bulan
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div style="position:relative; height:280px;">
+                        <canvas id="revenueTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stock Distribution -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-pie-chart-line me-2"></i>Distribusi Stok
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div style="position:relative; height:220px; margin:0 auto; max-width:220px;">
+                        <canvas id="stockChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-start">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge me-2" style="background:#28a745;">&nbsp;&nbsp;</span>
+                            <small>Stok Sehat: <strong>{{ stok_sehat }}</strong></small>
+                        </div>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="badge me-2" style="background:#ff9800;">&nbsp;&nbsp;</span>
+                            <small>Stok Rendah (<10): <strong>{{ stok_rendah }}</strong></small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="badge me-2" style="background:#f44336;">&nbsp;&nbsp;</span>
+                            <small>Stok Habis: <strong>{{ stok_habis }}</strong></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: Anomaly Detection + AI Usage -->
+    <div class="row">
+        <!-- Anomali -->
+        <div class="col-lg-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-alarm-warning-line me-2"></i>Deteksi Anomali & Peringatan
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if anomalies %}
+                    {% for anomaly in anomalies %}
+                    <div class="alert alert-{{ anomaly.level }} d-flex align-items-start gap-3 mb-3" role="alert">
+                        <i class="{{ anomaly.icon }} ri-24px mt-1"></i>
+                        <div>
+                            <h6 class="alert-heading mb-1">{{ anomaly.title }}</h6>
+                            <p class="mb-0 small">{{ anomaly.desc }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="alert alert-success d-flex align-items-start gap-3 mb-0">
+                        <i class="ri-check-double-line ri-24px mt-1"></i>
+                        <div>
+                            <h6 class="alert-heading mb-1">Tidak Ada Anomali</h6>
+                            <p class="mb-0 small">Semua metrik bisnis dalam kondisi normal.</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Usage Stats -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-robot-2-line me-2"></i>Statistik AI Chat
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="avatar">
+                            <span class="avatar-initial rounded bg-label-primary">
+                                <i class="ri-chat-3-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted small">Total Percakapan</span>
+                            <h5 class="mb-0 fw-bold">{{ total_chats }}</h5>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="avatar">
+                            <span class="avatar-initial rounded bg-label-success">
+                                <i class="ri-thumb-up-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted small">Feedback Positif</span>
+                            <h5 class="mb-0 fw-bold text-success">{{ total_feedback_up }}</h5>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="avatar">
+                            <span class="avatar-initial rounded bg-label-danger">
+                                <i class="ri-thumb-down-line ri-24px"></i>
+                            </span>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted small">Feedback Negatif</span>
+                            <h5 class="mb-0 fw-bold text-danger">{{ total_feedback_down }}</h5>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <div class="text-center">
+                        <small class="text-muted">
+                            <i class="ri-information-line me-1"></i>
+                            Data berdasarkan aktivitas user saat ini
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Deteksi dark mode
+    var isDark = document.documentElement.classList.contains('dark-style') ||
+                 document.body.classList.contains('dark-style') ||
+                 window.getComputedStyle(document.body).backgroundColor.includes('rgb(35') ||
+                 window.getComputedStyle(document.body).backgroundColor.includes('rgb(40');
+    var gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+    var tickColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+    var borderCol = isDark ? 'rgba(255,255,255,0.15)' : '#fff';
+
+    // ÔòÉÔòÉÔòÉ HEALTH SCORE GAUGE ÔòÉÔòÉÔòÉ
+    try {
+        var healthCtx = document.getElementById('healthChart');
+        if (healthCtx) {
+            var score = {{ health_score }};
+            var healthColor = '{{ health_color }}';
+            new Chart(healthCtx.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [score, 100 - score],
+                        backgroundColor: [healthColor, isDark ? 'rgba(255,255,255,0.1)' : '#e9ecef'],
+                        borderWidth: 0,
+                        circumference: 270,
+                        rotation: 225,
+                    }]
+                },
+                options: {
+                    cutout: '78%',
+                    responsive: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                }
+            });
+        }
+    } catch(e) { console.warn('Health chart error:', e); }
+
+    // ÔòÉÔòÉÔòÉ REVENUE TREND CHART ÔòÉÔòÉÔòÉ
+    try {
+        var trendEl = document.getElementById('revenueTrendChart');
+        if (trendEl) {
+            var labels = {{ monthly_labels|safe }};
+            var values = {{ monthly_values|safe }};
+
+            new Chart(trendEl.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Revenue (Rp)',
+                        data: values,
+                        backgroundColor: 'rgba(102, 108, 255, 0.75)',
+                        borderColor: '#666cff',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        barPercentage: 0.55,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(ctx) {
+                                    return 'Rp ' + ctx.parsed.y.toLocaleString('id-ID');
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: tickColor,
+                                callback: function(val) {
+                                    if (val >= 1000000) return 'Rp ' + (val / 1000000).toFixed(1) + 'jt';
+                                    if (val >= 1000) return 'Rp ' + (val / 1000).toFixed(0) + 'rb';
+                                    return 'Rp ' + val;
+                                }
+                            },
+                            grid: { color: gridColor }
+                        },
+                        x: {
+                            ticks: { color: tickColor },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+    } catch(e) { console.warn('Revenue chart error:', e); }
+
+    // ÔòÉÔòÉÔòÉ STOCK DISTRIBUTION CHART ÔòÉÔòÉÔòÉ
+    try {
+        var stockEl = document.getElementById('stockChart');
+        if (stockEl) {
+            var stokSehat = {{ stok_sehat }};
+            var stokRendah = {{ stok_rendah }};
+            var stokHabis = {{ stok_habis }};
+            var totalStok = stokSehat + stokRendah + stokHabis;
+
+            new Chart(stockEl.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Stok Sehat', 'Stok Rendah', 'Stok Habis'],
+                    datasets: [{
+                        data: totalStok > 0 ? [stokSehat, stokRendah, stokHabis] : [1],
+                        backgroundColor: totalStok > 0 ? ['#28a745', '#ff9800', '#f44336'] : ['rgba(255,255,255,0.1)'],
+                        borderWidth: 2,
+                        borderColor: borderCol,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            callbacks: {
+                                label: function(ctx) {
+                                    if (totalStok === 0) return 'Tidak ada data';
+                                    var pct = Math.round(ctx.parsed / totalStok * 100);
+                                    return ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    } catch(e) { console.warn('Stock chart error:', e); }
+});
+</script>
+{% endblock content %}
