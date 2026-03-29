@@ -313,12 +313,12 @@
                         </div>
                         <div>
                             <h5 class="mb-1">Backup Data</h5>
-                            <p class="text-muted mb-0 small">Download seluruh data ke file JSON</p>
+                            <p class="text-muted mb-0 small">Download seluruh data + gambar ke file ZIP</p>
                         </div>
                     </div>
                     <p class="mb-3">
-                        Buat cadangan seluruh database termasuk master data, transaksi, pengaturan, dan user. 
-                        File backup bisa digunakan untuk restore di kemudian hari.
+                        Buat cadangan seluruh database dan file media (gambar produk, foto karyawan, logo, bukti transaksi, dll). 
+                        File backup berformat ZIP bisa digunakan untuk restore di kemudian hari.
                     </p>
                     <form method="post" action="{% url 'pengaturan:backup_data' %}" id="backupForm">
                         {% csrf_token %}
@@ -349,7 +349,7 @@
                         </div>
                     </div>
                     <p class="mb-3">
-                        Pulihkan data dari file backup JSON yang sebelumnya. Data lama akan 
+                        Pulihkan data dari file backup ZIP (data + gambar) atau JSON (data saja). Data lama akan 
                         ditimpa dengan data dari file backup.
                     </p>
                     <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#restoreModal">
@@ -379,7 +379,7 @@
                     </div>
                     <p class="mb-3">
                         Hapus <strong class="text-danger">SELURUH DATA</strong> termasuk transaksi, master data, HR, 
-                        pengaturan, dan user lain. Hanya akun admin Anda yang dipertahankan.
+                        pengaturan, file media (gambar), dan user lain. Hanya akun admin Anda yang dipertahankan.
                     </p>
                     <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#resetModal">
                         <i class="ri-delete-bin-7-line me-1"></i>
@@ -614,9 +614,9 @@
                         Pastikan Anda sudah membuat backup terlebih dahulu.
                     </div>
                     <div class="mb-3">
-                        <label for="backup_file" class="form-label">Pilih File Backup (.json)</label>
-                        <input type="file" class="form-control" id="backup_file" name="backup_file" accept=".json" required>
-                        <div class="form-text">Hanya file .json yang diperbolehkan</div>
+                        <label for="backup_file" class="form-label">Pilih File Backup (.zip atau .json)</label>
+                        <input type="file" class="form-control" id="backup_file" name="backup_file" accept=".zip,.json" required>
+                        <div class="form-text">File .zip (data + gambar) atau .json (data saja, backward compatible)</div>
                     </div>
                     <div id="fileInfo" class="d-none">
                         <div class="d-flex align-items-center p-2 bg-light rounded">
