@@ -23,6 +23,7 @@ Fitur: export Excel & PDF, filter, search.
 {{ block.super }}
 <script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
 <script src="{% static 'vendor/libs/flatpickr/flatpickr.js' %}"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/id.js"></script>
 {% endblock vendor_js %}
 
 {% block content %}
@@ -211,8 +212,7 @@ Fitur: export Excel & PDF, filter, search.
                             {% if so.items.all %}
                             <div class="d-flex flex-wrap gap-1">
                                 {% for item in so.items.all|slice:":3" %}
-                                <span class="badge bg-label-secondary"><i class="ri-box-3-line me-1"></i>{{
-                                    item.produk.nama }}</span>
+                                <span class="badge bg-label-secondary"><i class="ri-box-3-line me-1"></i>{{ item.produk.nama }}</span>
                                 {% endfor %}
                                 {% if so.items.all.count > 3 %}
                                 <span class="badge bg-label-info">+{{ so.items.all.count|add:"-3" }} lainnya</span>

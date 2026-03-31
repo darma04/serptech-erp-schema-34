@@ -303,11 +303,13 @@ class DashboardView(TemplateView):
                 else:
                     earning_str = f'Rp {total_pos_revenue/1000000:.1f}jt'
                 
+                # Pastikan selalu 4 item (pad dengan placeholder jika kurang)
+                while len(pos_items_list) < 4:
+                    pos_items_list.append({'name': 'Belum ada data', 'count': 0})
+                
                 weekly_sales_data.append({
                     'category': 'Transaksi POS',
-                    'items': pos_items_list if pos_items_list else [
-                        {'name': 'Belum ada transaksi', 'count': 0}
-                    ],
+                    'items': pos_items_list[:4],
                     'earning': earning_str,
                     'growth': total_pos_count,
                     'product_image': top_pos_product.gambar if top_pos_product and top_pos_product.gambar else None
@@ -316,7 +318,12 @@ class DashboardView(TemplateView):
             except Exception as e:
                 weekly_sales_data.append({
                     'category': 'Transaksi POS',
-                    'items': [{'name': 'Belum ada data', 'count': 0}],
+                    'items': [
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                    ],
                     'earning': 'Rp 0',
                     'growth': 0,
                     'product_image': None
@@ -365,11 +372,13 @@ class DashboardView(TemplateView):
                 else:
                     earning_str = f'Rp {total_so_revenue/1000000:.1f}jt'
                 
+                # Pastikan selalu 4 item (pad dengan placeholder jika kurang)
+                while len(so_items_list) < 4:
+                    so_items_list.append({'name': 'Belum ada data', 'count': 0})
+                
                 weekly_sales_data.append({
                     'category': 'Sales Order',
-                    'items': so_items_list if so_items_list else [
-                        {'name': 'Belum ada order', 'count': 0}
-                    ],
+                    'items': so_items_list[:4],
                     'earning': earning_str,
                     'growth': total_so,
                     'product_image': top_so_product.gambar if top_so_product and top_so_product.gambar else None
@@ -378,7 +387,12 @@ class DashboardView(TemplateView):
             except Exception as e:
                 weekly_sales_data.append({
                     'category': 'Sales Order',
-                    'items': [{'name': 'Belum ada data', 'count': 0}],
+                    'items': [
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                    ],
                     'earning': 'Rp 0',
                     'growth': 0,
                     'product_image': None
@@ -420,11 +434,13 @@ class DashboardView(TemplateView):
                 else:
                     value_str = f'Rp {total_stock_value/1000000:.1f}jt'
                 
+                # Pastikan selalu 4 item (pad dengan placeholder jika kurang)
+                while len(stock_items_list) < 4:
+                    stock_items_list.append({'name': 'Belum ada data', 'count': 0})
+                
                 weekly_sales_data.append({
                     'category': 'Produk Stock Terbanyak',
-                    'items': stock_items_list if stock_items_list else [
-                        {'name': 'Belum ada produk', 'count': 0}
-                    ],
+                    'items': stock_items_list[:4],
                     'earning': value_str,
                     'growth': 8,
                     'product_image': highest_stock_product.gambar if highest_stock_product and highest_stock_product.gambar else None
@@ -433,7 +449,12 @@ class DashboardView(TemplateView):
             except Exception as e:
                 weekly_sales_data.append({
                     'category': 'Produk Stock Terbanyak',
-                    'items': [{'name': 'Belum ada data', 'count': 0}],
+                    'items': [
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                        {'name': 'Belum ada data', 'count': 0},
+                    ],
                     'earning': 'Rp 0',
                     'growth': 0,
                     'product_image': None
@@ -1270,7 +1291,38 @@ class DashboardView(TemplateView):
                 'visits_by_day_data': [0, 0, 0, 0, 0, 0, 0], 
                 'latest_users': [],
                 'marketing_sales_data': [], 
-                'weekly_sales_data': [],
+                'weekly_sales_data': [
+                    {
+                        'category': 'Transaksi POS',
+                        'items': [
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                        ],
+                        'earning': 'Rp 0', 'growth': 0, 'product_image': None
+                    },
+                    {
+                        'category': 'Sales Order',
+                        'items': [
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                        ],
+                        'earning': 'Rp 0', 'growth': 0, 'product_image': None
+                    },
+                    {
+                        'category': 'Produk Stock Terbanyak',
+                        'items': [
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                            {'name': 'Belum ada data', 'count': 0},
+                        ],
+                        'earning': 'Rp 0', 'growth': 0, 'product_image': None
+                    },
+                ],
                 'top_products': [],
                 'activity_timeline': [],
                 'sales_this_month': 0,

@@ -33,6 +33,8 @@ urlpatterns = [
     path('api/search-products/', views.search_products, name='api_search_products'),
     # URL: /pos/api/get-stocks-by-gudang/ — api_get_stocks_by_gudang
     path('api/get-stocks-by-gudang/', views.get_stocks_by_gudang, name='api_get_stocks_by_gudang'),
+    # URL: /pos/api/lookup-barcode/ — api_lookup_barcode (scanner barcode kamera)
+    path('api/lookup-barcode/', views.lookup_barcode, name='api_lookup_barcode'),
     
     # ===== INVOICE CRUD =====
     path('invoice/', views.InvoiceListView.as_view(), name='invoice_list'),

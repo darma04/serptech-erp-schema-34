@@ -4,8 +4,9 @@
 # /src/assets/vendor  <-- Di-uncomment agar aset terupload ke GitHub
 
 # Ignoring static/assets folders
-./assets/
-static/
+# (Dihapus agar file CSS/JS yang Anda edit bisa dikirim ke GitHub!)
+# ./assets/
+# static/
 staticfiles/
 # Byte-compiled / optimized / DLL files
 __pycache__/

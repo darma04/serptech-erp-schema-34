@@ -528,6 +528,55 @@ def get_stocks_by_gudang(request):
         }, status=500)
 
 
+@login_required
+def lookup_barcode(request):
+    """
+    API: Cari produk berdasarkan barcode atau SKU.
+    URL: /pos/api/lookup-barcode/?code=xxxxx
+    Digunakan oleh scanner barcode kamera di halaman POS.
+    
+    Alur pencarian (prioritas):
+    1. Cari exact match di field barcode
+    2. Cari exact match di field SKU
+    3. Jika tidak ditemukan → return error
+    """
+    code = request.GET.get('code', '').strip()
+    
+    if not code:
+        return JsonResponse({
+            'success': False,
+            'message': 'Kode barcode kosong'
+        }, status=400)
+    
+    # Cari berdasarkan barcode terlebih dahulu
+    produk = Produk.objects.filter(barcode=code).select_related('kategori', 'satuan').first()
+    
+    # Jika tidak ditemukan, cari berdasarkan SKU
+    if not produk:
+        produk = Produk.objects.filter(sku=code).select_related('kategori', 'satuan').first()
+    
+    if not produk:
+        return JsonResponse({
+            'success': False,
+            'message': f'Produk dengan barcode/SKU "{code}" tidak ditemukan'
+        })
+    
+    return JsonResponse({
+        'success': True,
+        'produk': {
+            'id': produk.id,
+            'nama': produk.nama,
+            'sku': produk.sku,
+            'barcode': produk.barcode or '',
+            'harga_jual': float(produk.harga_jual),
+            'gambar': produk.gambar.url if produk.gambar else '',
+            'satuan': produk.satuan.nama if produk.satuan else 'pcs',
+            'satuan_id': produk.satuan.id if produk.satuan else None,
+            'kategori': produk.kategori.nama if produk.kategori else '',
+        }
+    })
+
+
 # ╔══════════════════════════════════════════════════════════════╗
 # ║                  INVOICE CRUD                                  ║
 # ╚══════════════════════════════════════════════════════════════╝

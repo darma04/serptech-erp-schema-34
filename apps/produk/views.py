@@ -1013,3 +1013,51 @@ def api_konversi_satuan(request, produk_id):
             'harga_beli': float(produk.harga_beli),
         'konversi': konversi_list,
     })
+
+
+@login_required
+def update_barcode(request, pk):
+    """
+    API: Update field barcode produk via AJAX POST.
+    URL: /produk/<pk>/update-barcode/
+    Digunakan oleh modal Generator Barcode di halaman Daftar Produk.
+    Permission: produk.edit (can_edit)
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Method not allowed'}, status=405)
+
+    # Permission check: hanya user dengan hak edit produk yang bisa simpan barcode
+    from apps.core.permissions import has_permission
+    if not request.user.is_superuser and not has_permission(request.user, 'write', 'produk'):
+        return JsonResponse({'success': False, 'message': 'Anda tidak memiliki izin untuk mengubah barcode produk.'}, status=403)
+    
+    import json
+    try:
+        data = json.loads(request.body)
+        barcode_value = data.get('barcode', '').strip()
+    except json.JSONDecodeError:
+        barcode_value = request.POST.get('barcode', '').strip()
+    
+    try:
+        produk = Produk.objects.get(pk=pk)
+    except Produk.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Produk tidak ditemukan'}, status=404)
+    
+    # Cek apakah barcode sudah dipakai produk lain
+    if barcode_value:
+        existing = Produk.objects.filter(barcode=barcode_value).exclude(pk=pk).first()
+        if existing:
+            return JsonResponse({
+                'success': False,
+                'message': f'Barcode "{barcode_value}" sudah digunakan oleh produk: {existing.nama}'
+            })
+    
+    produk.barcode = barcode_value if barcode_value else None
+    produk.save(update_fields=['barcode'])
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'Barcode produk "{produk.nama}" berhasil diperbarui',
+        'barcode': produk.barcode or ''
+    })
+

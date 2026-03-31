@@ -46,25 +46,60 @@
                 </div>
             </div>
 
-            <!-- Quick Stats Card -->
+            <!-- Stok di Gudang -->
             <div class="card mt-3">
+                <div class="card-header py-2">
+                    <h6 class="mb-0"><i class="ri-archive-line me-2"></i>Stok di Gudang</h6>
+                </div>
                 <div class="card-body">
-                    <div class="mb-3">
-                        <small class="text-muted d-block">Total Stok</small>
-                        <h4 class="mb-0 text-primary">{{ produk.stok_total|floatformat:0 }} <small>{{ produk.satuan.nama|default:"pcs" }}</small></h4>
+                    {% if stok_list %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tbody>
+                                {% for stok in stok_list %}
+                                <tr>
+                                    <td><strong>{{ stok.gudang.nama }}</strong></td>
+                                    <td class="text-end">
+                                        <span class="badge bg-label-primary">{{ stok.jumlah|floatformat:0 }} {{ produk.satuan.nama|default:"pcs" }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-active">
+                                    <th>Total</th>
+                                    <th class="text-end"><span class="badge bg-primary">{{ produk.stok_total|floatformat:0 }} {{ produk.satuan.nama|default:"pcs" }}</span></th>
+                                </tr>
+                            </tfoot>
+                        </table>
                     </div>
-                    <div class="mb-3">
-                        <small class="text-muted d-block">Margin Keuntungan</small>
-                        <h5 class="mb-0 text-success">{{ margin|rupiah }}</h5>
+                    {% else %}
+                    <p class="text-muted text-center mb-0 small">Belum ada stok di gudang</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Barcode Produk Card -->
+            <div class="card mt-3">
+                <div class="card-header py-2">
+                    <h6 class="mb-0"><i class="ri-barcode-line me-2"></i>Barcode Produk</h6>
+                </div>
+                <div class="card-body text-center">
+                    {% if produk.barcode %}
+                    <div class="mb-2">
+                        <small class="text-muted d-block mb-1">{{ pengaturan.nama_perusahaan|default:"SERPTECH" }}</small>
+                        <svg id="detailBarcodePreview"></svg>
                     </div>
                     <div>
-                        <small class="text-muted d-block">Status Aktif</small>
-                        {% if produk.aktif %}
-                        <span class="badge bg-success fs-6">Aktif</span>
-                        {% else %}
-                        <span class="badge bg-secondary fs-6">Nonaktif</span>
-                        {% endif %}
+                        <small class="text-muted">Kode: </small>
+                        <code class="fs-6">{{ produk.barcode }}</code>
                     </div>
+                    {% else %}
+                    <div class="py-3 text-muted">
+                        <i class="ri-barcode-line d-block" style="font-size: 2rem;"></i>
+                        <small>Belum ada barcode</small>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -142,6 +177,16 @@
                                     <th><i class="ri-calendar-check-line me-1 text-warning"></i> Terakhir Diupdate</th>
                                     <td>{{ produk.diupdate_pada|date:"d M Y H:i" }}</td>
                                 </tr>
+                                <tr>
+                                    <th><i class="ri-checkbox-circle-line me-1" style="color: {% if produk.aktif %}#52d123{% else %}#8592a3{% endif %}"></i> Status</th>
+                                    <td>
+                                        {% if produk.aktif %}
+                                        <span class="badge bg-success">Aktif</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Nonaktif</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
                             </table>
                         </div>
                     </div>
@@ -155,45 +200,6 @@
                     {% endif %}
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Stok di Gudang - Full Width Section -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0"><i class="ri-archive-line me-2"></i>Stok di Gudang</h5>
-        </div>
-        <div class="card-body">
-            {% if stok_list %}
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Gudang</th>
-                            <th>Jumlah</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for stok in stok_list %}
-                        <tr>
-                            <td><strong>{{ stok.gudang.nama }}</strong></td>
-                            <td>
-                                <span class="badge bg-label-primary">{{ stok.jumlah|floatformat:0 }} {{ produk.satuan.nama|default:"pcs" }}</span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                    <tfoot>
-                        <tr class="table-active">
-                            <th>Total Stok</th>
-                            <th><span class="badge bg-primary">{{ produk.stok_total|floatformat:0 }} {{ produk.satuan.nama|default:"pcs" }}</span></th>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-            {% else %}
-            <p class="text-muted text-center mb-0">Belum ada stok di gudang</p>
-            {% endif %}
         </div>
     </div>
 
@@ -364,3 +370,45 @@
 </div>
 
 {% endblock content %}
+
+{% block page_js %}
+{% if produk.barcode %}
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var svgEl = document.getElementById('detailBarcodePreview');
+    var barcodeValue = '{{ produk.barcode|escapejs }}';
+    if (svgEl && barcodeValue) {
+        try {
+            var isEAN13 = /^\d{12,13}$/.test(barcodeValue);
+            JsBarcode(svgEl, barcodeValue, {
+                format: isEAN13 ? 'EAN13' : 'CODE128',
+                width: 1.8,
+                height: 60,
+                displayValue: true,
+                fontSize: 13,
+                margin: 8,
+                textMargin: 4,
+                background: '#ffffff'
+            });
+        } catch (e) {
+            try {
+                JsBarcode(svgEl, barcodeValue, {
+                    format: 'CODE128',
+                    width: 1.8,
+                    height: 60,
+                    displayValue: true,
+                    fontSize: 13,
+                    margin: 8,
+                    textMargin: 4,
+                    background: '#ffffff'
+                });
+            } catch (e2) {
+                svgEl.parentElement.innerHTML = '<span class="text-danger small">Gagal render barcode</span>';
+            }
+        }
+    }
+});
+</script>
+{% endif %}
+{% endblock page_js %}

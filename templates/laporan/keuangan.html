@@ -35,7 +35,10 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Pemasukan</p>
-                            <h4 class="mb-0 text-success summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ total_harga SO (confirmed/delivered/completed) + Σ total_harga POS (paid).<br><br><b>Sumber:</b> Tabel SalesOrder + POSTransaction.<br>Mendukung filter tanggal.">{{ total_pemasukan|rupiah }}</h4>
+                            <h4 class="mb-0 text-success summary-nominal" style="cursor:help" data-bs-toggle="tooltip"
+                                data-bs-placement="bottom" data-bs-html="true"
+                                title="<b>Alur Data:</b><br>Σ total_harga SO (confirmed/delivered/completed) + Σ total_harga POS (paid).<br><br><b>Sumber:</b> Tabel SalesOrder + POSTransaction.<br>Mendukung filter tanggal.">
+                                {{ total_pemasukan|rupiah }}</h4>
                             <small class="text-muted">Dari penjualan</small>
                         </div>
                         <div class="card-icon">
@@ -53,7 +56,10 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Pengeluaran</p>
-                            <h4 class="mb-0 text-danger summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ nominal Biaya (status approved) + Σ total_harga PO (approved/received).<br><br><b>Sumber:</b> Tabel Biaya + PurchaseOrder.<br>Mendukung filter tanggal.">{{ total_pengeluaran|rupiah }}</h4>
+                            <h4 class="mb-0 text-danger summary-nominal" style="cursor:help" data-bs-toggle="tooltip"
+                                data-bs-placement="bottom" data-bs-html="true"
+                                title="<b>Alur Data:</b><br>Σ nominal Biaya (status approved) + Σ total_harga PO (approved/received).<br><br><b>Sumber:</b> Tabel Biaya + PurchaseOrder.<br>Mendukung filter tanggal.">
+                                {{ total_pengeluaran|rupiah }}</h4>
                             <small class="text-muted">Pembelian + biaya</small>
                         </div>
                         <div class="card-icon">
@@ -71,7 +77,10 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Laba/Rugi Bersih</p>
-                            <h4 class="mb-0 {% if laba_rugi >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Total Pemasukan − Total Pengeluaran.<br><br><b>Sumber:</b> Selisih pemasukan dan pengeluaran.<br>Mendukung filter tanggal.">
+                            <h4 class="mb-0 {% if laba_rugi >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal"
+                                style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom"
+                                data-bs-html="true"
+                                title="<b>Alur Data:</b><br>Total Pemasukan − Total Pengeluaran.<br><br><b>Sumber:</b> Selisih pemasukan dan pengeluaran.<br>Mendukung filter tanggal.">
                                 {{ laba_rugi|rupiah }}
                             </h4>
                             <small class="text-muted">{% if laba_rugi >= 0 %}Laba{% else %}Rugi{% endif %}</small>
@@ -92,7 +101,10 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Aset</p>
-                            <h4 class="mb-0 text-primary summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_beli × qty_total_pernah_masuk)<br><br><b>Sumber:</b> Semua produk yang pernah masuk (stok + terjual + adjustment).<br>Bersifat kumulatif historis, tidak dipengaruhi filter tanggal.">{{ total_aset|rupiah }}</h4>
+                            <h4 class="mb-0 text-primary summary-nominal" style="cursor:help" data-bs-toggle="tooltip"
+                                data-bs-placement="bottom" data-bs-html="true"
+                                title="<b>Alur Data:</b><br>Σ (harga_beli × qty_total_pernah_masuk)<br><br><b>Sumber:</b> Semua produk yang pernah masuk (stok + terjual + adjustment).<br>Bersifat kumulatif historis, tidak dipengaruhi filter tanggal.">
+                                {{ total_aset|rupiah }}</h4>
                             <small class="text-muted">Nilai inventori historis</small>
                         </div>
                         <div class="card-icon">
@@ -114,7 +126,11 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Keuntungan Kotor</p>
-                            <h4 class="mb-0 {% if keuntungan_kotor >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_jual − harga_beli) × qty per item terjual (SO + POS).<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Mendukung filter tanggal dan cabang.">{{ keuntungan_kotor|rupiah }}</h4>
+                            <h4 class="mb-0 {% if keuntungan_kotor >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal"
+                                style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom"
+                                data-bs-html="true"
+                                title="<b>Alur Data:</b><br>Σ (harga_jual − harga_beli) × qty per item terjual (SO + POS).<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Mendukung filter tanggal dan cabang.">
+                                {{ keuntungan_kotor|rupiah }}</h4>
                             <small class="text-muted">Margin penjualan</small>
                         </div>
                         <div class="card-icon">
@@ -132,7 +148,10 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Harga Beli (Ready)</p>
-                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_beli × stok_saat_ini)<br><br><b>Sumber:</b> Hanya produk yang stoknya > 0.<br>Dari tabel Produk × Stok.">{{ total_harga_beli_ready|rupiah }}</h4>
+                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip"
+                                data-bs-placement="bottom" data-bs-html="true"
+                                title="<b>Alur Data:</b><br>Σ (harga_beli × stok_saat_ini)<br><br><b>Sumber:</b> Hanya produk yang stoknya > 0.<br>Dari tabel Produk × Stok.">
+                                {{ total_harga_beli_ready|rupiah }}</h4>
                             <small class="text-muted">Produk stok > 0</small>
                         </div>
                         <div class="card-icon">
@@ -150,7 +169,10 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Harga Jual (Ready)</p>
-                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_jual × stok_saat_ini)<br><br><b>Sumber:</b> Hanya produk yang stoknya > 0.<br>Dari tabel Produk × Stok.">{{ total_harga_jual_ready|rupiah }}</h4>
+                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip"
+                                data-bs-placement="bottom" data-bs-html="true"
+                                title="<b>Alur Data:</b><br>Σ (harga_jual × stok_saat_ini)<br><br><b>Sumber:</b> Hanya produk yang stoknya > 0.<br>Dari tabel Produk × Stok.">
+                                {{ total_harga_jual_ready|rupiah }}</h4>
                             <small class="text-muted">Produk stok > 0</small>
                         </div>
                         <div class="card-icon">
@@ -168,7 +190,11 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Estimasi Keuntungan</p>
-                            <h4 class="mb-0 {% if estimasi_keuntungan >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Total Harga Jual (Ready) − Total Harga Beli (Ready).<br><br><b>Sumber:</b> Selisih harga jual dan harga beli dari produk stok > 0.<br>Potensi keuntungan jika semua stok terjual.">{{ estimasi_keuntungan|rupiah }}</h4>
+                            <h4 class="mb-0 {% if estimasi_keuntungan >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal"
+                                style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom"
+                                data-bs-html="true"
+                                title="<b>Alur Data:</b><br>Total Harga Jual (Ready) − Total Harga Beli (Ready).<br><br><b>Sumber:</b> Selisih harga jual dan harga beli dari produk stok > 0.<br>Potensi keuntungan jika semua stok terjual.">
+                                {{ estimasi_keuntungan|rupiah }}</h4>
                             <small class="text-muted">Jika semua stok terjual</small>
                         </div>
                         <div class="card-icon">
@@ -199,7 +225,8 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <select class="form-select" id="cabangFilter">
                         <option value="">Semua Cabang</option>
                         {% for gudang in gudang_list %}
-                        <option value="{{ gudang.pk }}" {% if filter_cabang == gudang.pk|stringformat:'d' %}selected{% endif %}>{{ gudang.nama }}</option>
+                        <option value="{{ gudang.pk }}" {% if filter_cabang==gudang.pk|stringformat:'d' %}selected{%
+                            endif %}>{{ gudang.nama }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -208,7 +235,8 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <select class="form-select" id="metodeFilter">
                         <option value="">Semua Metode</option>
                         {% for metode in metode_pembayaran_list %}
-                        <option value="{{ metode.pk }}" {% if filter_metode == metode.pk|stringformat:'d' %}selected{% endif %}>{{ metode.nama }}</option>
+                        <option value="{{ metode.pk }}" {% if filter_metode==metode.pk|stringformat:'d' %}selected{%
+                            endif %}>{{ metode.nama }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -413,8 +441,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                             {% if pos.status == 'paid' %}
                             <span class="badge bg-label-success">Lunas</span>
                             {% else %}
-                            <span class="badge bg-label-secondary">{{ pos.get_status_display|default:pos.status
-                                }}</span>
+                            <span class="badge bg-label-secondary">{{ pos.get_status_display|default:pos.status }}</span>
                             {% endif %}
                         </td>
                         <td>
@@ -447,7 +474,8 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                                 <i class="ri-calculator-line me-2 text-primary" style="font-size: 1.5rem;"></i>
                                 <div class="text-start">
                                     <strong class="d-block" style="font-size: 1rem;">RINGKASAN PEMASUKAN</strong>
-                                    <small class="text-muted" style="font-size: 0.75rem;">SO: {{ total_sales_order|rupiah }} | POS: {{ total_pos|rupiah }}</small>
+                                    <small class="text-muted" style="font-size: 0.75rem;">SO: {{
+                                        total_sales_order|rupiah }} | POS: {{ total_pos|rupiah }}</small>
                                 </div>
                             </div>
                         </td>
@@ -555,7 +583,8 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                                 <i class="ri-calculator-line me-2 text-primary" style="font-size: 1.5rem;"></i>
                                 <div class="text-start">
                                     <strong class="d-block" style="font-size: 1rem;">RINGKASAN PENGELUARAN</strong>
-                                    <small class="text-muted" style="font-size: 0.75rem;">PO: {{ total_pembelian|rupiah }} | Biaya: {{ total_biaya|rupiah }}</small>
+                                    <small class="text-muted" style="font-size: 0.75rem;">PO: {{ total_pembelian|rupiah
+                                        }} | Biaya: {{ total_biaya|rupiah }}</small>
                                 </div>
                             </div>
                         </td>
@@ -967,70 +996,83 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
     }
 </script>
 <style>
-/* Responsive Summary Cards - Laporan Keuangan */
-.row > [class*="col-6"] > .card {
-    height: 100%;
-}
-.row > [class*="col-6"] > .card > .card-body {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
+    /* Responsive Summary Cards - Laporan Keuangan */
+    .row>[class*="col-6"]>.card {
+        height: 100%;
+    }
 
-@media (max-width: 575.98px) {
-    .summary-nominal {
-        font-size: 10px !important;
-        white-space: nowrap;
+    .row>[class*="col-6"]>.card>.card-body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
-    .card-info .card-text {
-        font-size: 0.68rem;
-        margin-bottom: 0.15rem !important;
-        line-height: 1.2;
+
+    @media (max-width: 575.98px) {
+        .summary-nominal {
+            font-size: 10px !important;
+            white-space: nowrap;
+        }
+
+        .card-info .card-text {
+            font-size: 0.68rem;
+            margin-bottom: 0.15rem !important;
+            line-height: 1.2;
+        }
+
+        .card-info small {
+            font-size: 0.6rem;
+        }
+
+        .card-body {
+            padding: 0.5rem 0.6rem !important;
+        }
+
+        .card-icon .badge {
+            padding: 0.25rem !important;
+        }
+
+        .card-icon .ri-24px {
+            font-size: 14px !important;
+        }
+
+        .card-info {
+            max-width: calc(100% - 32px);
+        }
     }
-    .card-info small {
-        font-size: 0.6rem;
+
+    @media (min-width: 576px) and (max-width: 767.98px) {
+        .summary-nominal {
+            font-size: 0.9rem !important;
+        }
+
+        .card-info .card-text {
+            font-size: 0.72rem;
+        }
+
+        .card-info small {
+            font-size: 0.62rem;
+        }
+
+        .card-body {
+            padding: 0.6rem 0.75rem !important;
+        }
+
+        .card-icon .ri-24px {
+            font-size: 16px !important;
+        }
     }
-    .card-body {
-        padding: 0.5rem 0.6rem !important;
+
+    @media (min-width: 768px) and (max-width: 991.98px) {
+        .summary-nominal {
+            font-size: 1.05rem !important;
+        }
     }
-    .card-icon .badge {
-        padding: 0.25rem !important;
-    }
-    .card-icon .ri-24px {
-        font-size: 14px !important;
-    }
-    .card-info {
-        max-width: calc(100% - 32px);
-    }
-}
-@media (min-width: 576px) and (max-width: 767.98px) {
-    .summary-nominal {
-        font-size: 0.9rem !important;
-    }
-    .card-info .card-text {
-        font-size: 0.72rem;
-    }
-    .card-info small {
-        font-size: 0.62rem;
-    }
-    .card-body {
-        padding: 0.6rem 0.75rem !important;
-    }
-    .card-icon .ri-24px {
-        font-size: 16px !important;
-    }
-}
-@media (min-width: 768px) and (max-width: 991.98px) {
-    .summary-nominal {
-        font-size: 1.05rem !important;
-    }
-}
 </style>
 <script>
     // Inisialisasi Bootstrap Tooltip
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.forEach(function(el) {
+        tooltipTriggerList.forEach(function (el) {
             new bootstrap.Tooltip(el, { trigger: 'hover focus click' });
         });
     });

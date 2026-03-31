@@ -9,14 +9,18 @@
 <link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/libs/datatables-buttons-bs5/buttons.bootstrap5.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/libs/flatpickr/flatpickr.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/sweetalert2/sweetalert2.css' %}" />
 {% endblock vendor_css %}
 
 {% block vendor_js %}
 {{ block.super }}
 <script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
 <script src="{% static 'vendor/libs/flatpickr/flatpickr.js' %}"></script>
+<script src="{% static 'vendor/libs/sweetalert2/sweetalert2.js' %}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<!-- JsBarcode: Library untuk generate gambar barcode (EAN-13, Code128, dll) -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 {% endblock vendor_js %}
 
 {% block content %}
@@ -238,7 +242,7 @@
                             <small class="text-muted">{{ produk.satuan.nama|default:"pcs" }}</small>
                         </td>
                         <td>
-                            {% if can_edit.produk or can_delete.produk %}
+                            {% if can_view.produk or can_edit.produk or can_delete.produk %}
                             <div class="dropdown">
                                 <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow"
                                     data-bs-toggle="dropdown">
@@ -250,10 +254,20 @@
                                         <i class="ri-edit-line me-2"></i>Edit
                                     </a>
                                     {% endif %}
-                                    {% if can_edit.produk and can_delete.produk %}
-                                    <div class="dropdown-divider"></div>
+                                    {% if can_view.produk %}
+                                    <a class="dropdown-item" href="javascript:void(0);"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#barcodeModal"
+                                        data-produk-id="{{ produk.pk }}"
+                                        data-produk-nama="{{ produk.nama }}"
+                                        data-produk-sku="{{ produk.sku }}"
+                                        data-produk-barcode="{{ produk.barcode|default_if_none:'' }}"
+                                        data-produk-harga="{{ produk.harga_jual }}">
+                                        <i class="ri-barcode-line me-2"></i>Cetak Barcode
+                                    </a>
                                     {% endif %}
                                     {% if can_delete.produk %}
+                                    <div class="dropdown-divider"></div>
                                     <a class="dropdown-item text-danger" href="javascript:void(0);"
                                         onclick="confirmDelete({{ produk.pk }}, '{{ produk.nama }}')">
                                         <i class="ri-delete-bin-line me-2"></i>Hapus Produk
@@ -357,6 +371,88 @@
     </div>
 </div>
 {% csrf_token %}
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MODAL: Generator & Cetak Label Barcode
+     Muncul saat klik "Cetak Barcode" di dropdown aksi produk.
+     Menggunakan JsBarcode untuk render preview barcode EAN-13.
+     Permission: Tombol dikendalikan oleh can_edit/can_view produk.
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="barcodeModal" tabindex="-1" aria-labelledby="barcodeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary align-items-center py-3">
+                <h5 class="modal-title text-white mb-0" id="barcodeModalLabel">
+                    <i class="ri-barcode-line me-2"></i>Generator & Cetak Barcode
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <!-- Info Produk -->
+                <div class="d-flex align-items-center gap-3 mb-4 p-3 rounded border" style="background: #f8f9ff;">
+                    <div class="flex-shrink-0">
+                        <div class="avatar avatar-md bg-label-primary rounded">
+                            <span class="avatar-initial"><i class="ri-shopping-bag-line"></i></span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1 fw-semibold" id="bcProdukNama">-</h6>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <small class="text-muted">SKU: <code class="text-primary fw-semibold" id="bcProdukSKU">-</code></small>
+                            <span class="badge bg-label-success" id="bcProdukHarga">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Kode Barcode -->
+                <div class="mb-4">
+                    <label class="form-label fw-medium" for="bcInputKode">
+                        <i class="ri-barcode-box-line me-1 text-primary"></i>Kode Barcode
+                    </label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="bcInputKode" placeholder="Masukkan kode barcode...">
+                        {% if can_create.produk or can_edit.produk %}
+                        <button class="btn btn-primary" type="button" id="btnGenerateBarcode" onclick="generateBarcode(document.getElementById('bcInputKode').value)">
+                            <i class="ri-refresh-line me-1"></i>Generate
+                        </button>
+                        {% endif %}
+                    </div>
+                    <div class="form-text">
+                        <i class="ri-information-line me-1"></i>Format EAN-13 (12-13 digit angka) atau otomatis CODE128
+                    </div>
+                </div>
+
+                <!-- Preview Barcode -->
+                <div class="mb-3">
+                    <label class="form-label fw-medium">
+                        <i class="ri-eye-line me-1 text-primary"></i>Preview Barcode
+                    </label>
+                    <div class="text-center p-4 border rounded" style="background: #ffffff; min-height: 130px;">
+                        <svg id="barcodePreviewSVG"></svg>
+                        <div id="barcodeError" class="text-danger small mt-2" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer px-4 py-3">
+                <div class="d-flex gap-2 w-100 justify-content-center flex-nowrap">
+                    {% if can_edit.produk %}
+                    <button type="button" class="btn btn-success flex-fill" id="btnSimpanBarcode" onclick="saveBarcodeToProduct(this)" style="max-width: 160px;">
+                        <i class="ri-save-line me-1"></i><span class="d-none d-sm-inline">Simpan</span><span class="d-inline d-sm-none">Simpan</span>
+                    </button>
+                    {% endif %}
+                    {% if can_view.produk %}
+                    <button type="button" class="btn btn-primary flex-fill" onclick="printBarcodeLabel()" style="max-width: 160px;">
+                        <i class="ri-printer-line me-1"></i><span class="d-none d-sm-inline">Cetak Label</span><span class="d-inline d-sm-none">Cetak</span>
+                    </button>
+                    <button type="button" class="btn btn-info text-white flex-fill" onclick="downloadBarcodePNG()" style="max-width: 160px;">
+                        <i class="ri-download-line me-1"></i><span class="d-none d-sm-inline">Download PNG</span><span class="d-inline d-sm-none">PNG</span>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock content %}
 
 {% block page_js %}
@@ -860,7 +956,395 @@ $('#confirmDeleteBtn').on('click', function() {
             $('#deleteProdukModal .modal-body').append('<div class="delete-error-msg alert alert-danger d-flex align-items-start mt-3 mb-0" role="alert"><i class="ri-error-warning-line me-2 fs-5"></i><div>' + msg + '</div></div>');
             btn.prop('disabled', false).html(originalText);
         }
-    });
 });
+});
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║      BARCODE GENERATOR & CETAK LABEL (JsBarcode + EAN-13)     ║
+// ║      Fungsi-fungsi ini HARUS di luar $(document).ready()      ║
+// ║      agar bisa dipanggil dari onclick="..." di HTML.          ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+let currentBarcodeProductId = null;
+var _pendingBarcodeData = null;
+
+/**
+ * LANGKAH 1: Tangkap data dari tombol "Cetak Barcode" saat diklik.
+ * Event click pada document memastikan data ditangkap SEBELUM dropdown
+ * Bootstrap menutup dan menghilangkan elemen trigger.
+ */
+document.addEventListener('click', function(e) {
+    var trigger = e.target.closest('[data-bs-target="#barcodeModal"]');
+    if (!trigger) return;
+    _pendingBarcodeData = {
+        id: trigger.getAttribute('data-produk-id'),
+        nama: trigger.getAttribute('data-produk-nama'),
+        sku: trigger.getAttribute('data-produk-sku'),
+        barcode: trigger.getAttribute('data-produk-barcode') || '',
+        harga: trigger.getAttribute('data-produk-harga')
+    };
+});
+
+/**
+ * LANGKAH 2: Saat modal SUDAH TAMPIL (shown.bs.modal), isi data produk.
+ * Menggunakan 'shown' bukan 'show' agar DOM modal sudah fully visible
+ * ketika kita set textContent dan panggil JsBarcode.
+ */
+var barcodeModalEl = document.getElementById('barcodeModal');
+if (barcodeModalEl) {
+    barcodeModalEl.addEventListener('shown.bs.modal', function(event) {
+        var button = event.relatedTarget;
+        var data = _pendingBarcodeData;
+
+        if (button && button.getAttribute && button.getAttribute('data-produk-id')) {
+            data = {
+                id: button.getAttribute('data-produk-id'),
+                nama: button.getAttribute('data-produk-nama'),
+                sku: button.getAttribute('data-produk-sku'),
+                barcode: button.getAttribute('data-produk-barcode') || '',
+                harga: button.getAttribute('data-produk-harga')
+            };
+        }
+
+        if (!data || !data.id) return;
+
+        currentBarcodeProductId = data.id;
+
+        // Set info produk di modal
+        document.getElementById('bcProdukNama').textContent = data.nama || '-';
+        document.getElementById('bcProdukSKU').textContent = data.sku || '-';
+        var hargaNum = parseFloat(data.harga) || 0;
+        document.getElementById('bcProdukHarga').textContent = 'Rp ' + hargaNum.toLocaleString('id-ID');
+
+        // Tentukan kode barcode: gunakan barcode yang ada, atau fallback ke SKU
+        var kodeBarcode = (data.barcode && data.barcode.trim() !== '' && data.barcode !== 'None') ? data.barcode : data.sku;
+        document.getElementById('bcInputKode').value = kodeBarcode;
+
+        // Generate preview barcode (delay kecil agar DOM ready)
+        setTimeout(function() {
+            generateBarcode(kodeBarcode);
+        }, 100);
+
+        _pendingBarcodeData = null;
+    });
+}
+
+/**
+ * Generate gambar barcode di SVG menggunakan JsBarcode.
+ * Mencoba EAN-13 terlebih dahulu (jika 13 digit angka), fallback ke CODE128.
+ */
+function generateBarcode(code) {
+    const svgEl = document.getElementById('barcodePreviewSVG');
+    const errorEl = document.getElementById('barcodeError');
+    errorEl.style.display = 'none';
+
+    if (!code || code.trim() === '') {
+        svgEl.innerHTML = '';
+        errorEl.style.display = 'block';
+        errorEl.textContent = 'Kode barcode kosong!';
+        return;
+    }
+
+    try {
+        // Cek apakah bisa menggunakan EAN-13 (harus 12 atau 13 digit angka)
+        const cleanCode = code.trim();
+        const isEAN13 = /^\d{12,13}$/.test(cleanCode);
+
+        JsBarcode(svgEl, cleanCode, {
+            format: isEAN13 ? 'EAN13' : 'CODE128',
+            width: 2,
+            height: 80,
+            displayValue: true,
+            fontSize: 14,
+            margin: 10,
+            textMargin: 5,
+            background: '#ffffff'
+        });
+    } catch (e) {
+        // Fallback ke CODE128 jika EAN-13 gagal
+        try {
+            JsBarcode(svgEl, code.trim(), {
+                format: 'CODE128',
+                width: 2,
+                height: 80,
+                displayValue: true,
+                fontSize: 14,
+                margin: 10,
+                textMargin: 5,
+                background: '#ffffff'
+            });
+        } catch (e2) {
+            svgEl.innerHTML = '';
+            errorEl.style.display = 'block';
+            errorEl.textContent = 'Gagal generate barcode: ' + e2.message;
+        }
+    }
+}
+
+/**
+ * Simpan kode barcode ke database via AJAX POST.
+ * @param {HTMLElement} btn - Tombol yang diklik (diterima dari onclick="saveBarcodeToProduct(this)")
+ */
+function saveBarcodeToProduct(btn) {
+    var barcodeValue = document.getElementById('bcInputKode').value.trim();
+    var csrfEl = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfEl) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'CSRF token tidak ditemukan. Refresh halaman.' });
+        return;
+    }
+    var csrftoken = csrfEl.value;
+    var originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+
+    fetch(`/produk/${currentBarcodeProductId}/update-barcode/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({ barcode: barcodeValue })
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Berhasil!',
+                text: data.message,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal',
+                text: data.message,
+                confirmButtonColor: '#696cff'
+            });
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Gagal menyimpan barcode. Periksa koneksi.',
+            confirmButtonColor: '#696cff'
+        });
+    });
+}
+
+/**
+ * Cetak label barcode — buka window print khusus.
+ * Format label standar retail (58mm x 40mm):
+ * - Baris 1: Nama perusahaan/toko
+ * - Baris 2: Nama produk
+ * - Baris 3: Gambar Barcode (SVG)
+ * - Baris 4: Harga
+ *
+ * KOMPATIBILITAS MOBILE (Capacitor WebView):
+ * - window.open() bisa diblokir oleh WebView → fallback ke iframe
+ * - Iframe digunakan untuk render label dan trigger window.print()
+ */
+function printBarcodeLabel() {
+    const svgEl = document.getElementById('barcodePreviewSVG');
+    const nama = document.getElementById('bcProdukNama').textContent;
+    const harga = document.getElementById('bcProdukHarga').textContent;
+    const svgData = svgEl.outerHTML;
+    const namaPerusahaan = '{{ pengaturan.nama_perusahaan|default:"SERPTECH"|escapejs }}';
+
+    const labelHTML = `
+        <html>
+        <head>
+            <title>Label Barcode - ${nama}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body {
+                    font-family: Arial, Helvetica, sans-serif;
+                    text-align: center;
+                    padding: 0;
+                }
+                .label-container {
+                    width: 58mm;
+                    min-height: 40mm;
+                    padding: 3mm 2mm;
+                    margin: 0 auto;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px dashed #ccc;
+                }
+                .company-name {
+                    font-size: 9px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    color: #333;
+                    margin-bottom: 2px;
+                }
+                .product-name {
+                    font-size: 10px;
+                    font-weight: 600;
+                    margin-bottom: 3px;
+                    color: #000;
+                    max-width: 100%;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .barcode-wrapper svg {
+                    max-width: 52mm;
+                    height: auto;
+                }
+                .product-price {
+                    font-size: 11px;
+                    font-weight: bold;
+                    color: #000;
+                    margin-top: 2px;
+                }
+                @media print {
+                    .label-container { border: none; }
+                    @page {
+                        margin: 0;
+                        size: 58mm 40mm;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="label-container">
+                <div class="company-name">${namaPerusahaan}</div>
+                <div class="product-name">${nama}</div>
+                <div class="barcode-wrapper">${svgData}</div>
+                <div class="product-price">${harga}</div>
+            </div>
+        </body>
+        </html>
+    `;
+
+    // Coba window.open dulu (browser desktop)
+    var printWindow = null;
+    try {
+        printWindow = window.open('', '_blank', 'width=450,height=400');
+    } catch(e) { printWindow = null; }
+
+    if (printWindow && !printWindow.closed && typeof printWindow.document !== 'undefined') {
+        // Browser desktop — jalur normal
+        printWindow.document.write(labelHTML);
+        printWindow.document.close();
+        printWindow.onload = function() { printWindow.print(); };
+    } else {
+        // WebView / mobile — popup diblokir, gunakan iframe
+        var iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;border:none;background:#fff;';
+        document.body.appendChild(iframe);
+        iframe.contentDocument.write(labelHTML);
+        iframe.contentDocument.close();
+        setTimeout(function() {
+            try {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            } catch(e) {
+                console.warn('[Barcode] Print via iframe gagal:', e);
+            }
+            // Hapus iframe setelah dialog print ditutup
+            setTimeout(function() {
+                if (iframe.parentElement) document.body.removeChild(iframe);
+            }, 2000);
+        }, 500);
+    }
+}
+
+/**
+ * Download barcode sebagai gambar PNG dengan label lengkap.
+ * Konversi SVG → Canvas → PNG blob → download.
+ * Gambar menyertakan: nama perusahaan, nama produk, barcode, harga.
+ */
+function downloadBarcodePNG() {
+    const svgEl = document.getElementById('barcodePreviewSVG');
+    const nama = document.getElementById('bcProdukNama').textContent;
+    const harga = document.getElementById('bcProdukHarga').textContent;
+    const namaPerusahaan = '{{ pengaturan.nama_perusahaan|default:"SERPTECH"|escapejs }}';
+
+    // Serialize SVG ke string
+    const serializer = new XMLSerializer();
+    const svgStr = serializer.serializeToString(svgEl);
+    const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    // Draw ke canvas dengan label lengkap
+    const img = new Image();
+    img.onload = function() {
+        const paddingX = 40;
+        const paddingTop = 70;
+        const paddingBottom = 50;
+        const canvasWidth = Math.max(img.width * 2, 400);
+        const barcodeWidth = img.width * 2;
+        const barcodeHeight = img.height * 2;
+        const canvasHeight = paddingTop + barcodeHeight + paddingBottom;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext('2d');
+
+        // Background putih
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Nama perusahaan (atas)
+        ctx.fillStyle = '#555555';
+        ctx.font = 'bold 14px Arial, Helvetica, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(namaPerusahaan.toUpperCase(), canvasWidth / 2, 20);
+
+        // Nama produk
+        ctx.fillStyle = '#000000';
+        ctx.font = '600 16px Arial, Helvetica, sans-serif';
+        var displayNama = nama.length > 35 ? nama.substring(0, 35) + '...' : nama;
+        ctx.fillText(displayNama, canvasWidth / 2, 42);
+
+        // Garis pemisah tipis
+        ctx.strokeStyle = '#eeeeee';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(paddingX, 50);
+        ctx.lineTo(canvasWidth - paddingX, 50);
+        ctx.stroke();
+
+        // Gambar barcode (tengah)
+        const barcodeX = (canvasWidth - barcodeWidth) / 2;
+        ctx.drawImage(img, barcodeX, paddingTop - 10, barcodeWidth, barcodeHeight);
+
+        // Harga (bawah)
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 18px Arial, Helvetica, sans-serif';
+        ctx.fillText(harga, canvasWidth / 2, paddingTop + barcodeHeight + 25);
+
+        // Download — kompatibel dengan Capacitor WebView via _downloadBlob
+        var filename = 'barcode_' + nama.replace(/[^a-zA-Z0-9]/g, '_') + '.png';
+        canvas.toBlob(function(blob) {
+            if (typeof window._isWebView === 'function' && window._isWebView() && typeof window._downloadBlob === 'function') {
+                // Mobile WebView — gunakan native bridge (SerpApp)
+                window._downloadBlob(blob, filename);
+            } else {
+                // Browser desktop — jalur normal
+                var link = document.createElement('a');
+                link.download = filename;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                setTimeout(function() { URL.revokeObjectURL(link.href); }, 1000);
+            }
+        }, 'image/png');
+
+        URL.revokeObjectURL(url);
+    };
+    img.src = url;
+}
 </script>
 {% endblock page_js %}

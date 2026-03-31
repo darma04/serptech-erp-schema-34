@@ -61,6 +61,9 @@ urlpatterns = [
     # URL: /produk/<int:pk>/delete/ — delete
     path('<int:pk>/delete/', views.ProdukDeleteView.as_view(), name='delete'),
 
+    # URL: /produk/<int:pk>/update-barcode/ — update_barcode (update barcode produk via AJAX)
+    path('<int:pk>/update-barcode/', views.update_barcode, name='update_barcode'),
+
     # API Konversi Satuan
     path('api/konversi-satuan/<int:produk_id>/', views.api_konversi_satuan, name='api_konversi_satuan'),
 ]

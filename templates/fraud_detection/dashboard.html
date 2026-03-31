@@ -329,14 +329,9 @@ FRAUD DETECTION DASHBOARD - Grafik gelombang (ApexCharts Area) + Doughnut
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
                                             <div class="avatar avatar-sm">
-                                                <span class="avatar-initial rounded-circle bg-label-danger">
-                                                    {{
-                                                    u.user_terkait__first_name|default:u.user_terkait__username|first|upper
-                                                    }}
-                                                </span>
+                                                <span class="avatar-initial rounded-circle bg-label-danger">{{ u.user_terkait__first_name|default:u.user_terkait__username|first|upper }}</span>
                                             </div>
-                                            <span>{{ u.user_terkait__first_name }} {{
-                                                u.user_terkait__last_name|default:"" }}</span>
+                                            <span>{{ u.user_terkait__first_name }} {{ u.user_terkait__last_name|default:"" }}</span>
                                         </div>
                                     </td>
                                     <td class="text-center">
@@ -426,9 +421,8 @@ FRAUD DETECTION DASHBOARD - Grafik gelombang (ApexCharts Area) + Doughnut
         var labelColor = isDark ? '#b4b5ba' : '#a5a3ae';
 
         // ═══ TREN ANOMALI — ApexCharts Area (Wave) ═══
-        var trendLabels = {{ trend_labels| safe
-    }};
-    var trendValues = {{ trend_values| safe }};
+        var trendLabels = {{ trend_labels|safe }};
+        var trendValues = {{ trend_values|safe }};
 
     if (trendLabels.length > 0 && document.querySelector('#trendAnomalyChart')) {
         var trendOptions = {
@@ -512,8 +506,8 @@ FRAUD DETECTION DASHBOARD - Grafik gelombang (ApexCharts Area) + Doughnut
     }
 
     // ═══ DISTRIBUSI JENIS — ApexCharts Donut ═══
-    var jenisLabels = {{ jenis_labels| safe }};
-    var jenisValues = {{ jenis_values| safe }};
+    var jenisLabels = {{ jenis_labels|safe }};
+    var jenisValues = {{ jenis_values|safe }};
 
     if (jenisLabels.length > 0 && document.querySelector('#jenisDistChart')) {
         var chartColors = ['#7367f0', '#28c76f', '#ff9f43', '#ea5455', '#00cfe8', '#a855f7', '#f472b6'];
