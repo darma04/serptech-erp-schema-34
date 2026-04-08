@@ -30,12 +30,6 @@
             <h4 class="mb-1">Detail Invoice</h4>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'pos:invoice_print' transaction.pk %}" target="_blank" class="btn btn-primary">
-                <i class="ri-printer-line me-1"></i>Cetak Invoice
-            </a>
-            <a href="{% url 'pos:invoice_print' transaction.pk %}?format=thermal" target="_blank" class="btn btn-warning">
-                <i class="ri-receipt-line me-1"></i>Cetak Struk
-            </a>
             <a href="{% url 'pos:invoice_list' %}" class="btn btn-label-secondary">
                 <i class="ri-arrow-left-line me-1"></i>Kembali
             </a>
