@@ -579,17 +579,16 @@
         position: relative;
         overflow: hidden;
     }
-    /* Hover: border hijau + shadow + naik sedikit */
+    /* Hover: border hijau + naik sedikit (tanpa shadow) */
     .payment-method-card:hover {
         border-color: #71dd37;
-        box-shadow: 0 4px 12px rgba(113,221,55,0.15);
         transform: translateY(-2px);
     }
-    /* Selected: border hijau + bg hijau tipis + shadow lebih kuat */
+    /* Selected: border hijau + bg hijau tipis + shadow (shadow HANYA saat dipilih) */
     .payment-method-card.selected {
         border-color: #71dd37;
         background-color: rgba(113,221,55,0.08);
-        box-shadow: 0 4px 12px rgba(113,221,55,0.2);
+        box-shadow: 0 4px 16px rgba(113,221,55,0.3);
     }
     /* Dark mode payment card */
     html.dark-style .payment-method-card { border-color: rgba(255,255,255,0.12); }
@@ -1166,7 +1165,8 @@
 
 <!-- Payment Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <!-- modal-dialog-scrollable membuat body pop up ini punya scroll tersendiri, menjaga tombol proses transaksi tetap menempel di dasar -->
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary d-flex justify-content-between align-items-center">
                 <h5 class="modal-title text-white">
@@ -1203,12 +1203,16 @@
 
                 <!-- Data Customer (Opsional) -->
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">
-                        <i class="ri-user-line me-1"></i>Customer <span class="text-muted fw-normal">(Opsional)</span>
-                    </label>
-                    <div id="customerFormFields" class="border rounded p-3">
-                        <div class="row g-2">
-                            <div class="col-12" style="position: relative;">
+                    <!-- Collapse Trigger untuk form customer agar tampilan lebih hemat dan ringkas -->
+                    <button class="btn btn-outline-primary w-100 text-start d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCustomer" aria-expanded="false" aria-controls="collapseCustomer">
+                        <span><i class="ri-user-line me-2"></i>Data Customer <small class="text-muted fw-normal">(Opsional)</small></span>
+                        <i class="ri-arrow-down-s-line"></i>
+                    </button>
+                    
+                    <div class="collapse mt-2" id="collapseCustomer">
+                        <div id="customerFormFields" class="border rounded p-3">
+                            <div class="row g-2">
+                                <div class="col-12" style="position: relative;">
                                 <label class="form-label small mb-1">Nama Customer</label>
                                 <input type="text" class="form-control form-control-sm" id="custInputNama" placeholder="Ketik nama untuk mencari..." autocomplete="off">
                                 <input type="hidden" id="custSelectedId" value="">
@@ -1229,15 +1233,20 @@
                             </div>
                         </div>
                     </div>
+                    </div> <!-- /collapse -->
                 </div>
 
                 <!-- Catatan (Opsional) — dipindah ke atas Uang Diterima -->
                 <div class="mb-3">
-                    <label class="form-label">
-                        <i class="ri-file-text-line me-1"></i>Catatan (Opsional)
-                    </label>
-                    <textarea class="form-control" id="transactionNotes" rows="2"
-                        placeholder="Tambahkan catatan..."></textarea>
+                    <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCatatan" aria-expanded="false" aria-controls="collapseCatatan">
+                        <span><i class="ri-file-text-line me-2"></i>Catatan Transaksi <small class="text-muted fw-normal">(Opsional)</small></span>
+                        <i class="ri-arrow-down-s-line"></i>
+                    </button>
+                    
+                    <div class="collapse mt-2" id="collapseCatatan">
+                        <textarea class="form-control" id="transactionNotes" rows="2"
+                            placeholder="Tambahkan catatan..."></textarea>
+                    </div>
                 </div>
 
 
@@ -1257,8 +1266,6 @@
                         <button class="btn btn-sm btn-outline-secondary" onclick="setCashAmount(50000)">50.000</button>
                         <button class="btn btn-sm btn-outline-secondary"
                             onclick="setCashAmount(100000)">100.000</button>
-                        <button class="btn btn-sm btn-outline-secondary"
-                            onclick="setCashAmount(200000)">200.000</button>
                     </div>
                 </div>
 
