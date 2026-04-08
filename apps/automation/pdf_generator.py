@@ -38,9 +38,29 @@ def _render_django_template(template_name, context):
     """
     Render template cetak Django ke string HTML menggunakan render_to_string.
     Ini SAMA persis dengan yang di-render browser saat user klik Cetak.
+
+    Di VPS (background thread), request object tidak tersedia.
+    Beberapa template membutuhkan context processor (request, csrf, dll).
+    Kita gunakan RequestFactory untuk membuat dummy request jika diperlukan.
     """
     from django.template.loader import render_to_string
-    return render_to_string(template_name, context)
+    try:
+        # Coba render dengan request=None (cukup untuk template cetak sederhana)
+        return render_to_string(template_name, context)
+    except Exception as e:
+        # Jika gagal karena butuh request context, coba dengan dummy request
+        logger.warning(f"[PDF] Template render gagal tanpa request: {e}, mencoba dengan dummy request")
+        try:
+            from django.test import RequestFactory
+            factory = RequestFactory()
+            dummy_request = factory.get('/')
+            # Tambahkan user anonymous jika diperlukan
+            from django.contrib.auth.models import AnonymousUser
+            dummy_request.user = AnonymousUser()
+            return render_to_string(template_name, context, request=dummy_request)
+        except Exception as e2:
+            logger.error(f"[PDF] Template render gagal total: {e2}", exc_info=True)
+            raise
 
 
 def _clean_html_for_pdf(html_content):

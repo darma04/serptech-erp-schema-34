@@ -608,6 +608,46 @@
     #paymentModal .modal-title i { font-size: 1.75rem; line-height: 1; }
     #paymentModal .modal-header .btn-close { padding: 0.5rem; margin: 0; }
 
+    /* ─── Payment Amount Display — Responsive untuk nominal besar ─────
+     * Pada mobile, nominal bisa sangat panjang (Rp 1.500.000.000)
+     * maka font-size di-kecilkan agar muat di setengah layar.
+     * Desktop: tetap besar dan jelas.
+     * ──────────────────────────────────────────────────────────── */
+    .payment-amount-display {
+        font-size: 1.15rem;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+
+    /* Modal footer: safe-area padding untuk Android/iPhone nav bar */
+    #paymentModal .modal-footer {
+        padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Mobile: perkecil font agar nominal miliaran muat di setengah layar */
+    @media (max-width: 576px) {
+        .payment-amount-display {
+            font-size: 0.95rem;
+        }
+        #paymentModal .modal-body {
+            padding: 0.75rem;
+        }
+        #paymentModal .modal-footer {
+            padding: 0.5rem 0.75rem;
+            padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 16px));
+        }
+    }
+
+    /* Tablet: font sedikit lebih besar */
+    @media (min-width: 577px) and (max-width: 991px) {
+        .payment-amount-display {
+            font-size: 1.05rem;
+        }
+        #paymentModal .modal-footer {
+            padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 8px));
+        }
+    }
+
     /* ─── Quantity Controls ────────────────────────────────────────────────────
      * Kontrol jumlah item di keranjang: tombol [-] [qty] [+]
      * Ukuran compact (28px tinggi) agar tidak memakan tempat di keranjang.
@@ -1222,19 +1262,21 @@
                     </div>
                 </div>
 
-                <!-- Total Tagihan (di atas) -->
-                <div class="alert alert-primary text-center mb-2 py-2">
-                    <small class="d-block mb-1">Total Tagihan</small>
-                    <h4 class="mb-0 text-primary fw-bold" id="modalTotalAmount">Rp 0</h4>
-                </div>
-
-                <!-- Kembalian (di bawah Total Tagihan) -->
-                <div class="alert alert-success text-center mb-0 py-2" id="changeAlert">
-                    <small class="d-block mb-1">Kembalian</small>
-                    <h4 class="mb-0 fw-bold" id="changeAmount">Rp 0</h4>
+                <!-- Total Tagihan & Kembalian — Sebaris di mobile agar hemat ruang -->
+                <div class="d-flex gap-2 mb-0">
+                    <!-- Total Tagihan (kiri) -->
+                    <div class="alert alert-primary text-center mb-0 py-2 flex-fill" style="min-width: 0;">
+                        <small class="d-block mb-1">Total Tagihan</small>
+                        <h5 class="mb-0 text-primary fw-bold payment-amount-display" id="modalTotalAmount">Rp 0</h5>
+                    </div>
+                    <!-- Kembalian (kanan) -->
+                    <div class="alert alert-success text-center mb-0 py-2 flex-fill" id="changeAlert" style="min-width: 0;">
+                        <small class="d-block mb-1">Kembalian</small>
+                        <h5 class="mb-0 fw-bold payment-amount-display" id="changeAmount">Rp 0</h5>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));">
                 <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Batal</button>
                 <button type="button" class="btn btn-success" onclick="processPayment()">
                     <i class="ri-check-line me-1"></i>Proses Transaksi
