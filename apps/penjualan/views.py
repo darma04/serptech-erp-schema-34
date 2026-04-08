@@ -315,9 +315,11 @@ class SalesOrderPrintView(ReadPermissionMixin, TemplateView):
         # Data konteks: sales_order - untuk ditampilkan di template
         context['sales_order'] = get_object_or_404(SalesOrder, pk=so_id)
         # Import dari modul internal proyek
-        from apps.pengaturan.models import TemplateCetak
+        from apps.pengaturan.models import TemplateCetak, PengaturanPerusahaan
         # Data konteks: template - untuk ditampilkan di template
         context['template'] = TemplateCetak.get_template('sales_order')
+        # Data konteks: perusahaan — untuk logo di header cetak
+        context['perusahaan'] = PengaturanPerusahaan.load()
         return context
 
 

@@ -12,123 +12,56 @@
  - Jadi fungsi ini dipanggil SETELAH semua items disimpan di views
 
  Fungsi yang tersedia:
- ┌───────────────────────────────┬──────────────────────────────────────┐
- │ Fungsi                        │ Dipanggil dari                       │
- ├───────────────────────────────┼──────────────────────────────────────┤
- │ kirim_notifikasi_pos()        │ pos/views.py setelah transaksi POS   │
- │ kirim_notifikasi_sales_order()│ penjualan/views.py setelah SO dibuat │
- │ kirim_notifikasi_purchase_order()│ pembelian/views.py setelah PO dibuat│
- │ kirim_notifikasi_biaya()      │ biaya/views.py setelah biaya dibuat  │
- └───────────────────────────────┴──────────────────────────────────────┘
+ ┌───────────────────────────────────┬──────────────────────────────────────┐
+ │ Fungsi                            │ Dipanggil dari                       │
+ ├───────────────────────────────────┼──────────────────────────────────────┤
+ │ kirim_notifikasi_pos()            │ pos/views.py setelah transaksi POS   │
+ │ kirim_notifikasi_sales_order()    │ penjualan/views.py setelah SO dibuat │
+ │ kirim_notifikasi_purchase_order() │ pembelian/views.py setelah PO dibuat │
+ │ kirim_notifikasi_biaya()          │ biaya/views.py setelah biaya dibuat  │
+ │ kirim_notifikasi_penggajian()     │ hr/views.py setelah gaji dibuat      │
+ └───────────────────────────────────┴──────────────────────────────────────┘
 
  Setiap fungsi mengikuti pola yang sama:
  1. refresh_from_db() → Ambil data terbaru dari database
  2. Format detail items menjadi string untuk pesan
  3. Siapkan dict data sesuai placeholder template
- 4. Panggil kirim_notifikasi_async() → kirim di background thread
+ 4. Cek apakah kirim_pdf aktif:
+    - Jika YA → kirim PDF+caption (1 pesan gabungan), TANPA pesan teks terpisah
+    - Jika TIDAK → kirim pesan teks biasa saja
 
  Terhubung dengan:
- - telegram_service.py → kirim_notifikasi_async(), format_angka()
- - views.py (pos, penjualan, pembelian, biaya) → Memanggil fungsi di sini
+ - telegram_service.py → kirim_notifikasi_async(), kirim_dokumen_async(), format_angka()
+ - pdf_generator.py → generate_*_pdf() untuk membuat file PDF
+ - views.py (pos, penjualan, pembelian, biaya, hr) → Memanggil fungsi di sini
  - models.py → TemplatePesan (template pesan diambil dari database)
 ==========================================================================
 """
 
 # Import fungsi dari telegram_service.py:
-# - kirim_notifikasi_async: mengirim notifikasi di background thread
-# - format_angka: format angka menjadi "1,000,000" (dengan pemisah ribuan)
-from .telegram_service import kirim_notifikasi_async, format_angka
+from .telegram_service import kirim_notifikasi_async, kirim_dokumen_async, format_angka
+
+
+def _is_kirim_pdf_aktif():
+    """Cek apakah fitur kirim Telegram aktif. Sesuai request, PDF selalu dikirim."""
+    try:
+        from .models import PengaturanTelegram
+        pengaturan = PengaturanTelegram.load()
+        # Selalu return True untuk PDF jika telegram aktif keseluruhan
+        return pengaturan.aktif
+    except Exception:
+        return False
 
 
 def kirim_notifikasi_pos(instance):
     """
     Kirim notifikasi Telegram untuk transaksi POS yang baru selesai.
-
-    Parameter:
-        instance: Object POSTransaction yang sudah memiliki items lengkap
-
-    Dipanggil dari:
-        pos/views.py → setelah checkout berhasil dan semua POSTransactionItem tersimpan
-
-    Alur data:
-    1. Refresh data dari DB → pastikan subtotal/total terbaru
-    2. Loop semua items → format menjadi string list
-    3. Siapkan dict data → sesuai placeholder di template POS
-    4. Kirim via kirim_notifikasi_async('pos', ...) → background thread
-
-    Data yang dikirim ke template:
-    - nomor_transaksi, tanggal, kasir, gudang
-    - detail_items (daftar produk x qty = subtotal)
-    - subtotal, diskon, pajak, total
-    - metode_pembayaran, status, customer
+    Jika kirim_pdf aktif: kirim PDF dengan caption template (1 pesan).
+    Jika tidak: kirim teks notifikasi saja.
     """
-    # Refresh data dari database agar subtotal/total terbaru
-    # Kenapa? Karena setelah items disimpan, total mungkin berubah
     instance.refresh_from_db()
 
-    # ═══ Format detail items ═══
-    # Loop semua POSTransactionItem yang terkait
-    # Format: "  1. Beras Premium x2 = Rp 30,000"
-    items = instance.items.all()  # QuerySet: semua item transaksi ini
-    detail_items = ""
-    for i, item in enumerate(items, 1):  # enumerate mulai dari 1 (bukan 0)
-        detail_items += f"  {i}. {item.produk.nama} x{item.jumlah} = Rp {format_angka(item.subtotal)}\n"
-
-    # Jika tidak ada items (seharusnya tidak terjadi, tapi jaga-jaga)
-    if not detail_items:
-        detail_items = "  (Belum ada item)"
-
-    # ═══ Siapkan data untuk template ═══
-    # Key di dict ini HARUS sesuai dengan placeholder {{key}} di TemplatePesan
-    data = {
-        # Identitas transaksi
-        'nomor_transaksi': instance.nomor_transaksi,          # Contoh: TRX-20260306-001
-        'tanggal': instance.tanggal.strftime('%d/%m/%Y %H:%M') if instance.tanggal else '-',
-
-        # Pelaku transaksi
-        'kasir': instance.kasir.get_full_name() or instance.kasir.username if instance.kasir else '-',
-        'gudang': str(instance.gudang) if instance.gudang else '-',  # Nama gudang/cabang
-
-        # Detail item (string multi-line)
-        'detail_items': detail_items.strip(),
-
-        # Nominal
-        'subtotal': format_angka(instance.subtotal),          # Sebelum diskon & pajak
-        'diskon': format_angka(instance.diskon),              # Total diskon
-        'pajak': format_angka(instance.pajak),                # Total pajak (PPN)
-        'total': format_angka(instance.total_harga),          # Grand total
-
-        # Info pembayaran
-        'metode_pembayaran': str(instance.metode_pembayaran) if instance.metode_pembayaran else '-',
-        'status': instance.get_status_display() if hasattr(instance, 'get_status_display') else instance.status,
-        'customer': instance.nama_customer or 'Walk-in',      # Default: Walk-in (tanpa nama)
-    }
-
-    # Kirim notifikasi di background thread (tidak blocking view)
-    # Parameter: jenis_transaksi, nomor_referensi, data_dict
-    kirim_notifikasi_async('pos', instance.nomor_transaksi, data)
-
-
-def kirim_notifikasi_sales_order(instance):
-    """
-    Kirim notifikasi Telegram untuk Sales Order yang baru dibuat.
-
-    Parameter:
-        instance: Object SalesOrder yang sudah memiliki items lengkap
-
-    Dipanggil dari:
-        penjualan/views.py → setelah SO dan semua SalesOrderItem tersimpan
-
-    Perbedaan dengan POS:
-    - POS = penjualan langsung di kasir (Walk-in customer)
-    - SO = penjualan via order (customer terdaftar + alamat pengiriman)
-    - POS pakai 'kasir', SO pakai 'customer' dan 'dibuat_oleh'
-    """
-    # Refresh data dari DB → pastikan total terbaru setelah items disimpan
-    instance.refresh_from_db()
-
-    # ═══ Format detail items SO ═══
-    items = instance.items.all()  # QuerySet: semua SalesOrderItem
+    items = instance.items.all()
     detail_items = ""
     for i, item in enumerate(items, 1):
         detail_items += f"  {i}. {item.produk.nama} x{item.jumlah} = Rp {format_angka(item.subtotal)}\n"
@@ -136,11 +69,50 @@ def kirim_notifikasi_sales_order(instance):
     if not detail_items:
         detail_items = "  (Belum ada item)"
 
-    # ═══ Data untuk template Sales Order ═══
     data = {
-        'nomor_so': instance.nomor_so,                        # Contoh: SO/2026/03/0015
+        'nomor_transaksi': instance.nomor_transaksi,
         'tanggal': instance.tanggal.strftime('%d/%m/%Y %H:%M') if instance.tanggal else '-',
-        'customer': str(instance.customer) if instance.customer else '-',  # Nama customer terdaftar
+        'kasir': instance.kasir.get_full_name() or instance.kasir.username if instance.kasir else '-',
+        'gudang': str(instance.gudang) if instance.gudang else '-',
+        'detail_items': detail_items.strip(),
+        'subtotal': format_angka(instance.subtotal),
+        'diskon': format_angka(instance.diskon),
+        'pajak': format_angka(instance.pajak),
+        'total': format_angka(instance.total_harga),
+        'metode_pembayaran': str(instance.metode_pembayaran) if instance.metode_pembayaran else '-',
+        'status': instance.get_status_display() if hasattr(instance, 'get_status_display') else instance.status,
+        'customer': instance.nama_customer or 'Walk-in',
+    }
+
+    if _is_kirim_pdf_aktif():
+        # Kirim PDF dengan teks template sebagai caption (1 pesan gabungan)
+        from .pdf_generator import generate_pos_pdf
+        kirim_dokumen_async('pos', instance.nomor_transaksi, instance, generate_pos_pdf, data)
+    else:
+        # Kirim pesan teks saja
+        kirim_notifikasi_async('pos', instance.nomor_transaksi, data)
+
+
+def kirim_notifikasi_sales_order(instance):
+    """
+    Kirim notifikasi Telegram untuk Sales Order yang baru dibuat.
+    Jika kirim_pdf aktif: kirim PDF dengan caption template (1 pesan).
+    Jika tidak: kirim teks notifikasi saja.
+    """
+    instance.refresh_from_db()
+
+    items = instance.items.all()
+    detail_items = ""
+    for i, item in enumerate(items, 1):
+        detail_items += f"  {i}. {item.produk.nama} x{item.jumlah} = Rp {format_angka(item.subtotal)}\n"
+
+    if not detail_items:
+        detail_items = "  (Belum ada item)"
+
+    data = {
+        'nomor_so': instance.nomor_so,
+        'tanggal': instance.tanggal.strftime('%d/%m/%Y %H:%M') if instance.tanggal else '-',
+        'customer': str(instance.customer) if instance.customer else '-',
         'gudang': str(instance.gudang) if instance.gudang else '-',
         'detail_items': detail_items.strip(),
         'subtotal': format_angka(instance.subtotal),
@@ -148,34 +120,25 @@ def kirim_notifikasi_sales_order(instance):
         'pajak': format_angka(instance.pajak),
         'total': format_angka(instance.total_harga),
         'status': instance.get_status_display() if hasattr(instance, 'get_status_display') else instance.status,
-        # Siapa yang membuat SO (bukan kasir, tapi user yang login)
         'dibuat_oleh': instance.dibuat_oleh.get_full_name() or instance.dibuat_oleh.username if instance.dibuat_oleh else '-',
     }
 
-    kirim_notifikasi_async('sales_order', instance.nomor_so, data)
+    if _is_kirim_pdf_aktif():
+        from .pdf_generator import generate_sales_order_pdf
+        kirim_dokumen_async('sales_order', instance.nomor_so, instance, generate_sales_order_pdf, data)
+    else:
+        kirim_notifikasi_async('sales_order', instance.nomor_so, data)
 
 
 def kirim_notifikasi_purchase_order(instance):
     """
     Kirim notifikasi Telegram untuk Purchase Order yang baru dibuat.
-
-    Parameter:
-        instance: Object PurchaseOrder yang sudah memiliki items lengkap
-
-    Dipanggil dari:
-        pembelian/views.py → setelah PO dan semua PurchaseOrderItem tersimpan
-
-    Perbedaan dengan SO:
-    - SO = penjualan ke customer (uang masuk)
-    - PO = pembelian dari supplier (uang keluar)
-    - PO pakai 'supplier' bukan 'customer'
-    - PO tidak punya field 'diskon' (hanya subtotal + pajak)
+    Jika kirim_pdf aktif: kirim PDF dengan caption template (1 pesan).
+    Jika tidak: kirim teks notifikasi saja.
     """
-    # Refresh data dari DB
     instance.refresh_from_db()
 
-    # ═══ Format detail items PO ═══
-    items = instance.items.all()  # QuerySet: semua PurchaseOrderItem
+    items = instance.items.all()
     detail_items = ""
     for i, item in enumerate(items, 1):
         detail_items += f"  {i}. {item.produk.nama} x{item.jumlah} = Rp {format_angka(item.subtotal)}\n"
@@ -183,12 +146,11 @@ def kirim_notifikasi_purchase_order(instance):
     if not detail_items:
         detail_items = "  (Belum ada item)"
 
-    # ═══ Data untuk template Purchase Order ═══
     data = {
-        'nomor_po': instance.nomor_po,                        # Contoh: PO/2026/03/0008
+        'nomor_po': instance.nomor_po,
         'tanggal': instance.tanggal.strftime('%d/%m/%Y %H:%M') if instance.tanggal else '-',
-        'supplier': str(instance.supplier) if instance.supplier else '-',  # Nama supplier
-        'gudang': str(instance.gudang) if instance.gudang else '-',        # Gudang tujuan
+        'supplier': str(instance.supplier) if instance.supplier else '-',
+        'gudang': str(instance.gudang) if instance.gudang else '-',
         'detail_items': detail_items.strip(),
         'subtotal': format_angka(instance.subtotal),
         'pajak': format_angka(instance.pajak),
@@ -197,38 +159,79 @@ def kirim_notifikasi_purchase_order(instance):
         'dibuat_oleh': instance.dibuat_oleh.get_full_name() or instance.dibuat_oleh.username if instance.dibuat_oleh else '-',
     }
 
-    kirim_notifikasi_async('purchase_order', instance.nomor_po, data)
+    if _is_kirim_pdf_aktif():
+        from .pdf_generator import generate_purchase_order_pdf
+        kirim_dokumen_async('purchase_order', instance.nomor_po, instance, generate_purchase_order_pdf, data)
+    else:
+        kirim_notifikasi_async('purchase_order', instance.nomor_po, data)
 
 
 def kirim_notifikasi_biaya(instance):
     """
     Kirim notifikasi Telegram untuk Transaksi Biaya yang baru dibuat.
-
-    Parameter:
-        instance: Object TransaksiBiaya yang baru tersimpan
-
-    Dipanggil dari:
-        biaya/views.py → setelah TransaksiBiaya berhasil disimpan
-
-    Perbedaan dengan POS/SO/PO:
-    - Biaya TIDAK punya items (single line item)
-    - Hanya ada jumlah sekali, bukan subtotal dari banyak item
-    - Ada field kategori biaya (Listrik, Gaji, Sewa, dll)
+    Jika kirim_pdf aktif: kirim PDF dengan caption template (1 pesan).
+    Jika tidak: kirim teks notifikasi saja.
     """
-    # Refresh data dari DB
     instance.refresh_from_db()
 
-    # ═══ Data untuk template Biaya ═══
-    # Biaya lebih sederhana: tidak ada items, hanya 1 jumlah
     data = {
-        'nomor_transaksi': instance.nomor_transaksi,          # Contoh: EXP/2026/03/0001
-        'tanggal': instance.tanggal.strftime('%d/%m/%Y') if instance.tanggal else '-',  # Hanya tanggal (bukan datetime)
-        'kategori': str(instance.kategori) if instance.kategori else '-',  # Nama kategori biaya
-        'jumlah': format_angka(instance.jumlah),              # Nominal pengeluaran
-        'deskripsi': instance.deskripsi or '-',               # Penjelasan biaya
+        'nomor_transaksi': instance.nomor_transaksi,
+        'tanggal': instance.tanggal.strftime('%d/%m/%Y') if instance.tanggal else '-',
+        'kategori': str(instance.kategori) if instance.kategori else '-',
+        'jumlah': format_angka(instance.jumlah),
+        'deskripsi': instance.deskripsi or '-',
         'status': instance.get_status_display() if hasattr(instance, 'get_status_display') else instance.status,
         'dibuat_oleh': instance.dibuat_oleh.get_full_name() or instance.dibuat_oleh.username if instance.dibuat_oleh else '-',
         'metode_pembayaran': str(instance.metode_pembayaran) if instance.metode_pembayaran else '-',
     }
 
-    kirim_notifikasi_async('biaya', instance.nomor_transaksi, data)
+    if _is_kirim_pdf_aktif():
+        from .pdf_generator import generate_biaya_pdf
+        kirim_dokumen_async('biaya', instance.nomor_transaksi, instance, generate_biaya_pdf, data)
+    else:
+        kirim_notifikasi_async('biaya', instance.nomor_transaksi, data)
+
+
+def kirim_notifikasi_penggajian(instance):
+    """
+    Kirim notifikasi Telegram untuk Slip Gaji karyawan.
+    Jika kirim_pdf aktif: kirim PDF dengan caption template (1 pesan).
+    Jika tidak: kirim teks notifikasi saja.
+    """
+    instance.refresh_from_db()
+
+    # Hitung total tunjangan dan potongan untuk template pesan
+    total_tunjangan = (
+        instance.tunjangan_jabatan +
+        instance.tunjangan_makan +
+        instance.tunjangan_transport +
+        instance.tunjangan_lainnya
+    )
+
+    total_potongan = (
+        instance.potongan_bpjs_kesehatan +
+        instance.potongan_bpjs_ketenagakerjaan +
+        instance.potongan_pph21 +
+        instance.potongan_lainnya
+    )
+
+    nomor_ref = f"GAJI/{instance.karyawan.nik}/{instance.periode_bulan}/{instance.periode_tahun}"
+
+    data = {
+        'nama_karyawan': instance.karyawan.nama,
+        'nik': instance.karyawan.nik,
+        'jabatan': instance.karyawan.jabatan.nama if instance.karyawan.jabatan else '-',
+        'departemen': instance.karyawan.departemen.nama if instance.karyawan.departemen else '-',
+        'periode': instance.periode,
+        'gaji_pokok': format_angka(instance.gaji_pokok),
+        'tunjangan': format_angka(total_tunjangan),
+        'potongan': format_angka(total_potongan),
+        'gaji_bersih': format_angka(instance.gaji_bersih),
+        'status': instance.get_status_display() if hasattr(instance, 'get_status_display') else instance.status,
+    }
+
+    if _is_kirim_pdf_aktif():
+        from .pdf_generator import generate_penggajian_pdf
+        kirim_dokumen_async('penggajian', nomor_ref, instance, generate_penggajian_pdf, data)
+    else:
+        kirim_notifikasi_async('penggajian', nomor_ref, data)

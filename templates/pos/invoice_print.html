@@ -4,6 +4,7 @@
    Template cetak thermal/A4 untuk invoice transaksi POS.
    Layout standalone (tanpa extends layout) untuk print langsung.
    Menampilkan header perusahaan, item, total, dan footer.
+   Menggunakan TABLE layout agar konsisten di browser DAN xhtml2pdf (Telegram PDF).
    ==========================================================================
 {% endcomment %}
 {% load currency_filters %}
@@ -37,23 +38,15 @@
             border: 1px solid #ddd;
         }
 
-        .invoice-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
+        .header-table {
+            width: 100%;
             border-bottom: 3px solid #696cff;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
         }
 
-        .company-info {
-            flex: 1;
-        }
-
-        .company-logo {
-            max-width: 150px;
-            max-height: 80px;
-            margin-bottom: 10px;
+        .header-table td {
+            vertical-align: top;
         }
 
         .company-name {
@@ -63,14 +56,12 @@
             margin-bottom: 5px;
         }
 
+        .company-logo { height: 26px; width: auto; vertical-align: middle; }
+
         .company-details {
             font-size: 11px;
             color: #666;
             line-height: 1.4;
-        }
-
-        .invoice-title {
-            text-align: right;
         }
 
         .invoice-title h1 {
@@ -87,30 +78,30 @@
 
         .invoice-status {
             display: inline-block;
-            padding: 5px 15px;
+            padding: 6px 20px;
+            -webkit-border-radius: 20px;
             border-radius: 20px;
             font-weight: bold;
             font-size: 11px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
         }
 
         .status-paid {
-            background: #d4edda;
+            background-color: #d4edda;
             color: #155724;
+            border: 1px solid #c3e6cb;
         }
 
         .status-unpaid {
-            background: #fff3cd;
+            background-color: #fff3cd;
             color: #856404;
+            border: 1px solid #ffeeba;
         }
 
-        .invoice-info {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 30px;
-        }
-
-        .info-section {
-            flex: 1;
+        .info-table {
+            width: 100%;
+            margin-bottom: 25px;
         }
 
         .info-section h3 {
@@ -162,29 +153,23 @@
             text-align: center;
         }
 
-        .items-table tbody tr:hover {
-            background: #f8f9fa;
-        }
-
-        .totals-section {
-            margin-left: auto;
+        .totals-table {
             width: 300px;
+            margin-left: auto;
+            border-collapse: collapse;
         }
 
-        .total-row {
-            display: flex;
-            justify-content: space-between;
+        .totals-table td {
             padding: 8px 0;
             border-bottom: 1px solid #eee;
         }
 
-        .total-row.grand-total {
+        .totals-table .grand-total td {
             border-top: 2px solid #696cff;
             border-bottom: 2px solid #696cff;
             font-size: 16px;
             font-weight: bold;
             color: #696cff;
-            margin-top: 10px;
             padding: 12px 0;
         }
 
@@ -193,12 +178,6 @@
             padding: 15px;
             border-radius: 5px;
             margin-bottom: 20px;
-        }
-
-        .payment-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
         }
 
         .notes {
@@ -213,18 +192,26 @@
             margin-bottom: 5px;
         }
 
-        .invoice-footer {
-            margin-top: 40px;
-            padding-top: 20px;
+        .footer-table {
+            width: 100%;
             border-top: 1px solid #ddd;
+            margin-top: 10px;
+        }
+
+        .footer-table td {
+            padding-top: 25px;
             text-align: center;
             font-size: 11px;
             color: #666;
+            line-height: 1.8;
         }
 
-        .signature-section {
-            display: flex;
-            justify-content: space-between;
+        .footer-table p {
+            margin: 0 0 3px 0;
+        }
+
+        .signature-table {
+            width: 100%;
             margin-top: 50px;
             margin-bottom: 20px;
         }
@@ -240,7 +227,26 @@
             padding-top: 5px;
         }
 
+        /* Mobile Responsive */
+        @media screen and (max-width: 768px) {
+            body { padding: 10px; }
+            .invoice-container { padding: 15px; }
+            .company-name { font-size: 18px; }
+            .invoice-title h1 { font-size: 22px; }
+            .info-label { width: 100px; }
+            .items-table th, .items-table td { padding: 6px 4px; font-size: 10px; }
+            .totals-table { width: 100%; }
+            .signature-box { width: 120px; }
+            .signature-line { margin-top: 40px; }
+        }
+
+        /* Print Styles */
         @media print {
+            .invoice-status, .order-status, .po-status, .slip-status {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
             body {
                 padding: 0;
                 background: #fff;
@@ -250,6 +256,10 @@
                 border: none;
                 padding: 0;
                 max-width: 100%;
+            }
+
+            .no-print {
+                display: none !important;
             }
 
             @page {
@@ -262,60 +272,66 @@
 
 <body>
     <div class="invoice-container">
-        <!-- Header -->
-        <div class="invoice-header">
-            <div class="company-info">
-                {% if template.tampilkan_logo and perusahaan.logo %}
-                <img src="{{ perusahaan.logo.url }}" alt="{{ template.header_nama_perusahaan }}" class="company-logo">
-                {% endif %}
-                <div class="company-name">{{ template.header_nama_perusahaan }}</div>
-                <div class="company-details">
-                    {{ template.header_alamat }}<br>
-                    Telp: {{ template.header_telepon }}<br>
-                    Email: {{ template.header_email }}
-                    {% if template.tampilkan_website and template.header_website %}<br>{{ template.header_website }}{% endif %}
-                </div>
-            </div>
-            <div class="invoice-title">
-                <h1>INVOICE</h1>
-                <div class="invoice-number">#{{ transaction.nomor_transaksi }}</div>
-                {% if transaction.status == 'paid' %}
-                <span class="invoice-status status-paid">LUNAS</span>
-                {% else %}
-                <span class="invoice-status status-unpaid">BELUM LUNAS</span>
-                {% endif %}
-            </div>
-        </div>
+        <!-- Header (TABLE layout untuk kompatibilitas xhtml2pdf) -->
+        <table class="header-table" cellpadding="0" cellspacing="0" style="width: 100%;">
+            <tr>
+                <td style="vertical-align: top; width: 50%;">
+                    <div class="company-name">
+                        {% if template.tampilkan_logo and perusahaan.logo %}
+                        <img src="{{ perusahaan.logo.url }}" alt="{{ template.header_nama_perusahaan }}" class="company-logo">&nbsp;
+                        {% endif %}
+                        {{ template.header_nama_perusahaan }}
+                    </div>
+                    <div class="company-details">
+                        {{ template.header_alamat }}<br>
+                        Telp: {{ template.header_telepon }}<br>
+                        Email: {{ template.header_email }}
+                        {% if template.tampilkan_website and template.header_website %}<br>{{ template.header_website }}{% endif %}
+                    </div>
+                </td>
+                <td style="text-align: right; vertical-align: top;" class="invoice-title">
+                    <h1>INVOICE</h1>
+                    <div class="invoice-number">#{{ transaction.nomor_transaksi }}</div>
+                    {% if transaction.status == 'paid' %}
+                    <span class="invoice-status status-paid">LUNAS</span>
+                    {% else %}
+                    <span class="invoice-status status-unpaid">BELUM LUNAS</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
 
-        <!-- Invoice Info -->
-        <div class="invoice-info">
-            <div class="info-section">
-                <h3>Informasi Transaksi</h3>
-                <div class="info-row">
-                    <span class="info-label">Tanggal:</span>
-                    <span>{{ transaction.tanggal|date:"d F Y, H:i" }} WIB</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Kasir:</span>
-                    <span>{{ transaction.kasir.get_full_name|default:transaction.kasir.username }}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Gudang:</span>
-                    <span>{{ transaction.gudang.nama }}</span>
-                </div>
-            </div>
-            <div class="info-section">
-                <h3>Informasi Customer</h3>
-                <div class="info-row">
-                    <span class="info-label">Nama:</span>
-                    <span>{{ transaction.nama_customer|default:"Customer Umum" }}</span>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Pembayaran:</span>
-                    <span>{{ transaction.metode_pembayaran.nama|default:"-" }}</span>
-                </div>
-            </div>
-        </div>
+        <!-- Invoice Info (TABLE layout) -->
+        <table class="info-table" cellpadding="0" cellspacing="0">
+            <tr>
+                <td style="vertical-align: top; width: 50%;" class="info-section">
+                    <h3>Informasi Transaksi</h3>
+                    <div class="info-row">
+                        <span class="info-label">Tanggal:</span>
+                        <span>{{ transaction.tanggal|date:"d F Y, H:i" }} WIB</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Kasir:</span>
+                        <span>{{ transaction.kasir.get_full_name|default:transaction.kasir.username }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Gudang:</span>
+                        <span>{{ transaction.gudang.nama }}</span>
+                    </div>
+                </td>
+                <td style="vertical-align: top; width: 50%;" class="info-section">
+                    <h3>Informasi Customer</h3>
+                    <div class="info-row">
+                        <span class="info-label">Nama:</span>
+                        <span>{{ transaction.nama_customer|default:"Customer Umum" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pembayaran:</span>
+                        <span>{{ transaction.metode_pembayaran.nama|default:"-" }}</span>
+                    </div>
+                </td>
+            </tr>
+        </table>
 
         <!-- Items Table -->
         <table class="items-table">
@@ -346,25 +362,25 @@
             </tbody>
         </table>
 
-        <!-- Totals -->
-        <div class="totals-section">
+        <!-- Totals (TABLE layout) -->
+        <table class="totals-table">
             {% if transaction.diskon > 0 %}
-            <div class="total-row">
-                <span>Diskon:</span>
-                <span style="color: #dc3545;">- {{ transaction.diskon|rupiah }}</span>
-            </div>
+            <tr>
+                <td>Diskon:</td>
+                <td style="text-align: right; color: #dc3545;">- {{ transaction.diskon|rupiah }}</td>
+            </tr>
             {% endif %}
             {% if transaction.pajak > 0 %}
-            <div class="total-row">
-                <span>Pajak:</span>
-                <span>{{ transaction.pajak|rupiah }}</span>
-            </div>
+            <tr>
+                <td>Pajak:</td>
+                <td style="text-align: right;">{{ transaction.pajak|rupiah }}</td>
+            </tr>
             {% endif %}
-            <div class="total-row grand-total">
-                <span>TOTAL:</span>
-                <span>{{ transaction.total_harga|rupiah }}</span>
-            </div>
-        </div>
+            <tr class="grand-total">
+                <td>TOTAL:</td>
+                <td style="text-align: right;">{{ transaction.total_harga|rupiah }}</td>
+            </tr>
+        </table>
 
         <!-- Notes -->
         {% if transaction.catatan %}
@@ -374,37 +390,185 @@
         </div>
         {% endif %}
 
-        <!-- Signature -->
-        <div class="signature-section">
-            <div class="signature-box">
-                <div class="signature-line">
-                    {{ template.signature_kiri_label }}
-                </div>
-            </div>
-            <div class="signature-box">
-                <div class="signature-line">
-                    {{ template.signature_kanan_label }}
-                </div>
-            </div>
-        </div>
+        <!-- Signature (TABLE layout) -->
+        <table class="signature-table" cellpadding="0" cellspacing="0">
+            <tr>
+                <td style="text-align: center; width: 200px;">
+                    <div class="signature-line">
+                        {{ template.signature_kiri_label }}
+                    </div>
+                </td>
+                <td>&nbsp;</td>
+                <td style="text-align: center; width: 200px;">
+                    <div class="signature-line">
+                        {{ template.signature_kanan_label }}
+                    </div>
+                </td>
+            </tr>
+        </table>
 
-        <!-- Footer -->
-        <div class="invoice-footer">
-            <p>{{ template.footer_ucapan }}</p>
-            <p>{{ template.footer_keterangan }}</p>
-            <p style="margin-top: 10px; font-size: 10px;">
-                Dicetak pada: {% now "d F Y, H:i" %} WIB
-            </p>
-        </div>
+        <!-- Footer (TABLE layout untuk konsistensi xhtml2pdf) -->
+        <table class="footer-table" cellpadding="0" cellspacing="0">
+            <tr>
+                <td>
+                    <p>{{ template.footer_ucapan }}</p>
+                    <p>{{ template.footer_keterangan }}</p>
+                    <p style="margin-top: 8px; font-size: 10px; color: #999;">
+                        Dicetak pada: {% now "d F Y, H:i" %} WIB
+                    </p>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Tombol Kembali (fallback untuk Android WebView) -->
+    <div id="backBtnWrap" class="no-print" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:9999;">
+        <a id="backBtn" href="javascript:void(0)" style="display:inline-block; padding:12px 32px; background:#696cff; color:#fff; text-decoration:none; border-radius:8px; font-size:14px; font-weight:bold; box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+            ← Kembali
+        </a>
     </div>
 
     <script>
-        // Langsung cetak saat halaman dimuat
-        window.onload = function () {
-            setTimeout(function() {
-                window.print();
-            }, 300);
-        }
+        // Smart Print Handler — kompatibel dengan Desktop, Mobile, Android WebView
+        (function() {
+            var printed = false;
+            var afterPrintFired = false;
+
+            // Deteksi Android WebView (TWA, WebView, Custom Tabs)
+            var ua = navigator.userAgent || '';
+            var isAndroidWebView = (
+                /Android/i.test(ua) && (
+                    /wv\b/i.test(ua) ||           // Android WebView indicator
+                    /Version\/[\d.]+/i.test(ua) || // WebView via Version string
+                    !/Chrome\/[\d.]+/i.test(ua) || // Bukan Chrome standalone
+                    /\bTWA\b/i.test(ua)            // Trusted Web Activity
+                )
+            );
+            // Deteksi lebih luas: semua Android (termasuk Chrome mobile)
+            var isAndroid = /Android/i.test(ua);
+            // Deteksi iOS
+            var isIOS = /iPhone|iPad|iPod/i.test(ua);
+            // Apakah perangkat mobile?
+            var isMobile = isAndroid || isIOS;
+
+            // Navigasi kembali ke halaman sebelumnya
+            function goBack() {
+                if (document.referrer && document.referrer !== '') {
+                    window.location.href = document.referrer;
+                } else if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.close();
+                }
+            }
+
+            // Tombol kembali handler
+            var backBtn = document.getElementById('backBtn');
+            if (backBtn) {
+                backBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    goBack();
+                });
+            }
+
+            // Tampilkan tombol kembali
+            function showBackButton() {
+                if (!afterPrintFired) {
+                    var wrap = document.getElementById('backBtnWrap');
+                    if (wrap) wrap.style.display = 'block';
+                }
+            }
+
+            // Buat toolbar aksi untuk mobile/WebView
+            function createMobileToolbar() {
+                var wrap = document.getElementById('backBtnWrap');
+                if (wrap) {
+                    wrap.innerHTML = '';
+                    wrap.style.display = 'flex';
+                    wrap.style.gap = '12px';
+                    wrap.style.alignItems = 'center';
+                    wrap.style.justifyContent = 'center';
+                    wrap.style.position = 'fixed';
+                    wrap.style.bottom = '20px';
+                    wrap.style.left = '50%';
+                    wrap.style.transform = 'translateX(-50%)';
+                    wrap.style.zIndex = '9999';
+
+                    // Tombol Print
+                    var printBtn = document.createElement('a');
+                    printBtn.href = 'javascript:void(0)';
+                    printBtn.innerHTML = '🖨️ Cetak';
+                    printBtn.style.cssText = 'display:inline-block;padding:12px 28px;background:#696cff;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+                    printBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        try {
+                            window.print();
+                        } catch(err) {
+                            alert('Fitur cetak tidak tersedia pada perangkat ini. Silakan gunakan browser Chrome untuk mencetak.');
+                        }
+                    });
+
+                    // Tombol Kembali
+                    var backBtnNew = document.createElement('a');
+                    backBtnNew.href = 'javascript:void(0)';
+                    backBtnNew.innerHTML = '← Kembali';
+                    backBtnNew.style.cssText = 'display:inline-block;padding:12px 28px;background:#8592a3;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+                    backBtnNew.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        goBack();
+                    });
+
+                    wrap.appendChild(printBtn);
+                    wrap.appendChild(backBtnNew);
+                }
+            }
+
+            function doPrint() {
+                if (printed) return;
+                printed = true;
+
+                if (isAndroidWebView || isMobile) {
+                    // Pada Android WebView/Mobile: tampilkan toolbar langsung
+                    // karena window.print() mungkin tidak menampilkan print dialog
+                    createMobileToolbar();
+
+                    // Tetap coba panggil window.print() pada mobile browser
+                    // yang mendukung (Chrome, Firefox mobile)
+                    if (typeof window.print === 'function') {
+                        try {
+                            window.print();
+                        } catch(e) {
+                            // Gagal print di mobile — toolbar sudah ditampilkan
+                        }
+                    }
+                } else {
+                    // Desktop: langsung panggil window.print()
+                    if (typeof window.print === 'function') {
+                        window.print();
+                    }
+                    // Fallback: Jika afterprint tidak fire dalam 3 detik
+                    setTimeout(showBackButton, 3000);
+                }
+            }
+
+            // Delay sedikit agar halaman ter-render sempurna
+            if (document.readyState === 'complete') {
+                setTimeout(doPrint, 400);
+            } else {
+                window.addEventListener('load', function() {
+                    setTimeout(doPrint, 400);
+                });
+            }
+
+            // Setelah print selesai/dibatalkan, kembali otomatis (desktop)
+            // Pada mobile, toolbar tetap ditampilkan agar user bisa navigasi
+            window.addEventListener('afterprint', function() {
+                afterPrintFired = true;
+                if (!isMobile) {
+                    setTimeout(goBack, 200);
+                }
+            });
+        })();
     </script>
 </body>
 

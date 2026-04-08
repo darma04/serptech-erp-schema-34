@@ -119,6 +119,29 @@ class PengaturanTelegram(models.Model):
         verbose_name="Notifikasi Transaksi Biaya"
     )
 
+    # Notifikasi saat slip gaji baru dibuat/dibayar
+    notif_penggajian = models.BooleanField(
+        default=True,
+        verbose_name="Notifikasi Slip Gaji"
+    )
+
+    # Toggle kirim PDF — jika True, setiap notifikasi juga mengirim file PDF
+    kirim_pdf = models.BooleanField(
+        default=True,
+        verbose_name="Kirim PDF Otomatis",
+        help_text="Jika aktif, setiap notifikasi juga akan mengirim file PDF dokumen ke Telegram"
+    )
+
+    # ═══ FIELD: System Prompt Bot Telegram ═══
+    # Instruksi kustom untuk mengatur perilaku AI chatbot di Telegram
+    # Jika kosong, akan menggunakan system prompt default dari telegram_bot.py
+    system_prompt_bot = models.TextField(
+        blank=True,
+        default='',
+        verbose_name="System Prompt Bot AI",
+        help_text="Instruksi tambahan untuk mengatur perilaku AI chatbot Telegram. Kosongkan untuk menggunakan default."
+    )
+
     # ═══ FIELD: Timestamp ═══
     dibuat_pada = models.DateTimeField(auto_now_add=True)   # Kapan pertama kali dibuat
     diupdate_pada = models.DateTimeField(auto_now=True)     # Kapan terakhir diupdate
@@ -195,6 +218,7 @@ class TemplatePesan(models.Model):
         ('sales_order', 'Sales Order'),      # Penjualan via Sales Order
         ('purchase_order', 'Purchase Order'),# Pembelian dari supplier
         ('biaya', 'Transaksi Biaya'),        # Pencatatan biaya operasional
+        ('penggajian', 'Slip Gaji'),         # Slip gaji karyawan
     ]
 
     # ═══ FIELD: Jenis Transaksi ═══
@@ -364,8 +388,6 @@ class TemplatePesan(models.Model):
             ),
 
             # ═══ Template Biaya ═══
-            # Placeholder: nomor_transaksi, tanggal, kategori,
-            # jumlah, deskripsi, status, dibuat_oleh
             'biaya': (
                 "💸 *TRANSAKSI BIAYA BARU*\n"
                 "━━━━━━━━━━━━━━━\n"
@@ -376,6 +398,22 @@ class TemplatePesan(models.Model):
                 "📝 Deskripsi: {{deskripsi}}\n"
                 "📊 Status: {{status}}\n"
                 "👤 Dibuat oleh: {{dibuat_oleh}}"
+            ),
+
+            # ═══ Template Slip Gaji ═══
+            'penggajian': (
+                "💼 *SLIP GAJI KARYAWAN*\n"
+                "━━━━━━━━━━━━━━━\n"
+                "👤 Karyawan: {{nama_karyawan}}\n"
+                "🏢 Jabatan: {{jabatan}}\n"
+                "📅 Periode: {{periode}}\n"
+                "━━━━━━━━━━━━━━━\n"
+                "💰 Gaji Pokok: Rp {{gaji_pokok}}\n"
+                "➕ Total Tunjangan: Rp {{tunjangan}}\n"
+                "➖ Total Potongan: Rp {{potongan}}\n"
+                "━━━━━━━━━━━━━━━\n"
+                "💵 *Gaji Bersih: Rp {{gaji_bersih}}*\n"
+                "📊 Status: {{status}}"
             ),
         }
         # Jika jenis tidak dikenali, gunakan template minimal

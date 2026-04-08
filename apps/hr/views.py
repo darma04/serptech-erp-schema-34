@@ -1199,9 +1199,11 @@ class PenggajianPrintView(ReadPermissionMixin, DetailView):
         """Menambahkan template cetak ke context."""
         context = super().get_context_data(**kwargs)
         # Import dari modul internal proyek
-        from apps.pengaturan.models import TemplateCetak
+        from apps.pengaturan.models import TemplateCetak, PengaturanPerusahaan
         # Data konteks: template - untuk ditampilkan di template
         context['template'] = TemplateCetak.get_template('slip_gaji')
+        # Data konteks: perusahaan — untuk logo di header cetak
+        context['perusahaan'] = PengaturanPerusahaan.load()
         return context
 
 
