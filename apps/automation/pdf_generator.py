@@ -80,28 +80,13 @@ def _clean_html_for_pdf(html_content):
 
     # === STATUS TEXT CONVERTER ===
     # xhtml2pdf tidak bisa merender badge <span> dengan padding/background.
-    # Solusi: konversi ke teks biasa dengan warna yang sesuai, tanpa badge/button.
-    STATUS_COLORS = {
-        'status-paid': '#155724', 'status-unpaid': '#856404',
-        'status-draft': '#666666', 'status-confirmed': '#084298',
-        'status-delivered': '#155724', 'status-completed': '#0c5460',
-        'status-cancelled': '#721c24', 'status-submitted': '#084298',
-        'status-approved': '#155724', 'status-received': '#0c5460',
-        'status-rejected': '#721c24', 'status-diproses': '#856404',
-        'status-dibayar': '#155724',
-    }
-
+    # Konversi ke teks biasa yang sifatnya neutral (TIDAK BERWARNA warni)
     def _replace_badge(match):
         classes = match.group(1)
         text = match.group(2)
-        color = '#666666'
-        for sc, c in STATUS_COLORS.items():
-            if sc in classes:
-                color = c
-                break
         return (
             f'<div style="text-align: right; font-weight: bold; font-size: 12px; '
-            f'color: {color}; text-transform: uppercase; letter-spacing: 0.5px; '
+            f'color: #333333; text-transform: uppercase; letter-spacing: 0.5px; '
             f'margin-top: 5px;">{text}</div>'
         )
 

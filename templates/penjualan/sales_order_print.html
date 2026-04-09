@@ -27,7 +27,7 @@
         .company-details { font-size: 11px; color: #666; line-height: 1.4; }
         .invoice-title h1 { font-size: 32px; color: #696cff; margin-bottom: 5px; }
         .invoice-number { font-size: 14px; color: #666; margin-bottom: 10px; }
-        .invoice-status { display: inline-block; padding: 6px 20px; -webkit-border-radius: 20px; border-radius: 20px; font-weight: bold; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; }
+        .invoice-status { display: inline-block; padding: 6px 20px; -webkit-border-radius: 20px; border-radius: 20px; font-weight: bold; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase;  margin-top: 12px; }
         .status-draft { background-color: #e0e0e0; color: #666; border: 1px solid #ccc; }
         .status-confirmed { background-color: #cfe2ff; color: #084298; border: 1px solid #b6d4fe; }
         .status-delivered { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
@@ -55,7 +55,7 @@
         .footer-table { width: 100%; border-top: 1px solid #ddd; margin-top: 10px; }
         .footer-table td { padding-top: 25px; text-align: center; font-size: 11px; color: #666; line-height: 1.8; }
         .footer-table p { margin: 0 0 3px 0; }
-        .signature-table { width: 100%; margin-top: 50px; margin-bottom: 20px; }
+        .signature-table { width: 100%; margin-top: 200px; margin-bottom: 20px; }
         .signature-line { border-top: 1px solid #333; margin-top: 60px; padding-top: 5px; text-align: center; }
 
         @media screen and (max-width: 768px) {
@@ -72,12 +72,12 @@
             .invoice-status, .order-status, .po-status, .slip-status {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
-            }
+             margin-top: 12px; }
 
             body { padding: 0; }
             .invoice-container { border: none; padding: 0; }
             .no-print { display: none !important; }
-            @page { margin: 1cm; }
+            @page { size: A4; margin: 1cm; }
         }
     </style>
 </head>
