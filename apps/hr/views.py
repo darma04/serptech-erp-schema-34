@@ -1137,6 +1137,9 @@ class PenggajianUpdateView(UpdatePermissionMixin, UpdateView):
     URL: /hr/penggajian/<pk>/edit/
     Permission: hr.penggajian.edit
     Template: hr/penggajian_form.html
+
+    ⚠ PROTEKSI: Slip gaji dengan status 'dibayar' TIDAK bisa diedit.
+    Data historis gaji yang sudah final harus tetap utuh untuk audit.
     """
     model = Penggajian
     form_class = PenggajianForm
@@ -1147,6 +1150,14 @@ class PenggajianUpdateView(UpdatePermissionMixin, UpdateView):
     # Modul permission yang dicek: 'hr'
     permission_module = 'hr'
     permission_sub_module = 'penggajian'
+
+    def dispatch(self, request, *args, **kwargs):
+        """Cek apakah slip gaji masih boleh diedit sebelum memproses request."""
+        self.object = self.get_object()
+        if self.object.status == 'dibayar':
+            messages.error(request, f'Slip gaji {self.object.karyawan.nama} periode {self.object.periode} sudah berstatus DIBAYAR dan tidak dapat diedit. Ubah status terlebih dahulu jika ingin melakukan koreksi.')
+            return redirect('hr:penggajian-detail', pk=self.object.pk)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         """Menambahkan judul 'Edit Slip Gaji' ke context."""

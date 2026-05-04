@@ -15,6 +15,8 @@
  /biaya/transaksi/<pk>/edit/       → Edit transaksi
  /biaya/transaksi/<pk>/delete/     → Hapus transaksi
  /biaya/transaksi/<pk>/print/      → Cetak bukti pengeluaran
+ /biaya/transaksi/<pk>/approve/    → Setujui transaksi biaya
+ /biaya/transaksi/<pk>/reject/     → Tolak transaksi biaya
 ==========================================================================
 """
 
@@ -45,4 +47,11 @@ urlpatterns = [
     path('transaksi/<int:pk>/delete/', views.TransaksiBiayaDeleteView.as_view(), name='transaksi_delete'),
     # URL: /biaya/transaksi/<int:pk>/print/ — transaksi_print
     path('transaksi/<int:pk>/print/', views.TransaksiBiayaPrintView.as_view(), name='transaksi_print'),
+    
+    # ===== WORKFLOW APPROVE / REJECT =====
+    # URL: /biaya/transaksi/<int:pk>/approve/ — transaksi_approve
+    path('transaksi/<int:pk>/approve/', views.TransaksiBiayaApproveView.as_view(), name='transaksi_approve'),
+    # URL: /biaya/transaksi/<int:pk>/reject/ — transaksi_reject
+    path('transaksi/<int:pk>/reject/', views.TransaksiBiayaRejectView.as_view(), name='transaksi_reject'),
 ]
+

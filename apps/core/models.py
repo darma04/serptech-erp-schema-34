@@ -121,6 +121,7 @@ class RolePermission(models.Model):
             ('laporan_penjualan', 'Laporan Penjualan'),     # Laporan penjualan
             ('laporan_pembelian', 'Laporan Pembelian'),     # Laporan pembelian
             ('laporan_keuangan', 'Laporan Keuangan'),       # Laporan keuangan
+            ('laporan_cabang', 'Laporan Cabang'),           # Laporan cabang
         ],
         'access_control': [
             ('roles', 'Roles'),                     # Daftar role
@@ -195,6 +196,7 @@ class RolePermission(models.Model):
         'laporan_penjualan': 'penjualan',
         'laporan_pembelian': 'pembelian',
         'laporan_keuangan': 'keuangan',
+        'laporan_cabang': 'cabang',
         # === Access Control ===
         'roles': 'roles',
         'permissions': 'permissions',

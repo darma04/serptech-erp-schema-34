@@ -207,7 +207,7 @@ class DashboardView(TemplateView):
                 pos_sold_by_produk = {}
                 for item in POSTransactionItem.objects.filter(
                     transaction__status='paid'
-                ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+                ).values('produk_id').annotate(total_qty=Sum('jumlah_konversi')):
                     pos_sold_by_produk[item['produk_id']] = item['total_qty']
                 
                 # Qty adjustment per produk — TANPA filter tanggal (kumulatif historis)
@@ -469,7 +469,7 @@ class DashboardView(TemplateView):
             
             # Dictionary untuk menggabungkan data penjualan dari SO + POS
             # Key = produk_id, Value = {total_qty, total_revenue, produk_data}
-            product_sales = defaultdict(lambda: {'total_qty': 0, 'total_revenue': 0, 'produk_data': None})
+            product_sales = defaultdict(lambda: {'total_qty': 0, 'total_revenue': 0, 'total_cost': 0, 'produk_data': None})
             
             # Ambil data penjualan dari SalesOrderItem (dengan filter tanggal)
             so_top_filter = {'sales_order__status__in': ['confirmed', 'delivered', 'completed']}
@@ -489,13 +489,15 @@ class DashboardView(TemplateView):
                 'produk__gambar'
             ).annotate(
                 total_qty=Sum('jumlah'),
-                total_revenue=Sum('subtotal')
+                total_revenue=Sum('subtotal'),
+                total_cost=Sum(F('produk__harga_beli') * F('jumlah'), output_field=DecimalField())
             )
             
             for item in so_items:
                 pid = item['produk__id']
                 product_sales[pid]['total_qty'] += float(item['total_qty'] or 0)
                 product_sales[pid]['total_revenue'] += float(item['total_revenue'] or 0)
+                product_sales[pid]['total_cost'] += float(item['total_cost'] or 0)
                 product_sales[pid]['produk_data'] = item
             
             # Ambil data penjualan dari POSTransactionItem (dengan filter tanggal)
@@ -516,13 +518,15 @@ class DashboardView(TemplateView):
                 'produk__gambar'
             ).annotate(
                 total_qty=Sum('jumlah'),
-                total_revenue=Sum('subtotal')
+                total_revenue=Sum('subtotal'),
+                total_cost=Sum(F('produk__harga_beli') * F('jumlah_konversi'), output_field=DecimalField())
             )
             
             for item in pos_items:
                 pid = item['produk__id']
                 product_sales[pid]['total_qty'] += float(item['total_qty'] or 0)
                 product_sales[pid]['total_revenue'] += float(item['total_revenue'] or 0)
+                product_sales[pid]['total_cost'] += float(item['total_cost'] or 0)
                 if not product_sales[pid]['produk_data']:
                     product_sales[pid]['produk_data'] = item
             
@@ -557,9 +561,9 @@ class DashboardView(TemplateView):
                     status = 'Out of Stock'
                     status_class = 'danger'
                 
-                # Hitung keuntungan (profit)
+                # Hitung keuntungan (profit) — cost sudah dihitung per sumber (SO: jumlah, POS: jumlah_konversi)
                 revenue = data['total_revenue']
-                cost = float(item['produk__harga_beli'] or 0) * data['total_qty']
+                cost = data['total_cost']
                 profit = revenue - cost
                 profit_percentage = (profit / revenue * 100) if revenue > 0 else 0
                 
@@ -880,7 +884,7 @@ class DashboardView(TemplateView):
                     **profit_pos_filter
                 ).annotate(
                     margin=ExpressionWrapper(
-                        (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah'),
+                        (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah_konversi'),
                         output_field=DecimalField()
                     )
                 ).aggregate(total=Sum('margin'))['total'] or 0
@@ -922,8 +926,8 @@ class DashboardView(TemplateView):
                     **purchase_cost_filter
                 ).aggregate(total=Sum('total_harga'))['total'] or 0
                 
-                # Total biaya operasional — DIPERBAIKI: hanya biaya 'approved' yang dihitung
-                # Biaya draft/submitted/rejected bukan pengeluaran nyata
+                # Total biaya operasional — HANYA yang sudah disetujui (approved) = pengeluaran nyata
+                # Draft dan submitted belum dianggap uang keluar hingga di-approve
                 biaya_filter_dashboard = {'status': 'approved'}
                 if filter_start:
                     biaya_filter_dashboard['tanggal__gte'] = filter_start
@@ -1025,7 +1029,7 @@ class DashboardView(TemplateView):
                         **gudang_pos_filter
                     ).annotate(
                         margin=ExpressionWrapper(
-                            (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah'),
+                            (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah_konversi'),
                             output_field=DecimalField()
                         )
                     ).aggregate(total=Sum('margin'))['total'] or 0

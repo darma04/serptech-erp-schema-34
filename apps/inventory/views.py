@@ -66,6 +66,7 @@ from apps.inventory.forms import TransferStokForm, AdjustmentStokForm, TransferS
 from web_project import TemplateLayout
 # Import dari modul internal proyek
 from apps.core.mixins import ReadPermissionMixin, CreatePermissionMixin, UpdatePermissionMixin, DeletePermissionMixin
+from apps.core.permissions import has_permission
 from django.db import transaction
 
 
@@ -298,12 +299,21 @@ class AdjustmentStokView(ReadPermissionMixin, ListView):
     context_object_name = 'adjustment_list'
     # Modul permission yang dicek: 'inventory'
     permission_module = 'inventory'
+    permission_sub_module = 'adjustment_stok'
+
+    def get_queryset(self):
+        """Override queryset - optimasi query dengan select_related."""
+        return AdjustmentStok.objects.select_related(
+            'produk', 'produk__satuan', 'gudang', 'dibuat_oleh'
+        ).order_by('-dibuat_pada')
 
     def get_context_data(self, **kwargs):
         """Menambahkan data konteks tambahan ke template."""
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
         # Data konteks: total_adjustment - untuk ditampilkan di template
         context['total_adjustment'] = self.get_queryset().count()
+        # Data konteks: gudang_list - untuk filter dropdown di template
+        context['gudang_list'] = Gudang.objects.filter(aktif=True)
         return context
 
 
@@ -385,6 +395,7 @@ class AdjustmentStokCreateView(CreatePermissionMixin, CreateView):
     success_url = reverse_lazy('inventory:adjustment')
     # Modul permission yang dicek: 'inventory'
     permission_module = 'inventory'
+    permission_sub_module = 'adjustment_stok'
 
     def get_context_data(self, **kwargs):
         """Menambahkan data konteks tambahan ke template."""
@@ -400,6 +411,41 @@ class AdjustmentStokCreateView(CreatePermissionMixin, CreateView):
         # Tampilkan pesan sukses ke user
         messages.success(self.request, 'Adjustment Stok berhasil dibuat')
         return super().form_valid(form)
+
+
+class AdjustmentStokDeleteView(DeletePermissionMixin, DeleteView):
+    """
+    Hapus adjustment stok - return JSON response untuk AJAX.
+    URL: /inventory/adjustment/<pk>/delete/
+    Permission: DeletePermissionMixin → cek can_delete untuk modul inventory
+    """
+    model = AdjustmentStok
+    # URL redirect setelah operasi berhasil
+    success_url = reverse_lazy('inventory:adjustment')
+    # Modul permission yang dicek: 'inventory'
+    permission_module = 'inventory'
+    permission_sub_module = 'adjustment_stok'
+
+    def delete(self, request, *args, **kwargs):
+        """Hapus data - return JSON response untuk AJAX."""
+        self.object = self.get_object()
+
+        # Blok penanganan error - coba jalankan kode di bawah
+        try:
+            nomor_adjustment = self.object.nomor_adjustment
+            self.object.delete()
+            return JsonResponse({
+                'success': True,
+                'message': f'Adjustment Stok {nomor_adjustment} berhasil dihapus'
+            })
+        # Tangkap error ProtectedError - data terkait dengan data lain
+        except ProtectedError:
+            return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Gagal menghapus adjustment stok: {str(e)}'
+            }, status=400)
 
 
 class TransferStokDetailView(ReadPermissionMixin, DetailView):
@@ -424,11 +470,9 @@ class TransferStokDetailView(ReadPermissionMixin, DetailView):
 
 class TransferStokUpdateView(UpdatePermissionMixin, UpdateView):
     """
-    Edit transfer stok - hanya bisa jika status masih 'draft'.
+    Edit transfer stok - bisa diedit pada semua status.
     URL: /inventory/transfer/<pk>/edit/
-
-    dispatch() mengecek status sebelum tampilkan form.
-    Jika bukan draft → redirect ke halaman detail dengan pesan error.
+    Permission: UpdatePermissionMixin → cek can_edit untuk modul inventory via RBAC
     """
     model = TransferStok
     form_class = TransferStokForm
@@ -458,15 +502,86 @@ class TransferStokUpdateView(UpdatePermissionMixin, UpdateView):
 
 
     def form_valid(self, form):
+        from django.db import transaction as db_transaction
 
         context = self.get_context_data()
         # Data konteks: formset - untuk ditampilkan di template
         formset = context['formset']
 
         if formset.is_valid():
-            self.object = form.save()
-            formset.instance = self.object
-            formset.save()
+            transfer = self.get_object()
+            is_completed = transfer.status == 'completed'
+
+            # Jika transfer sudah completed, ROLLBACK stok lama sebelum save
+            old_items_data = []
+            old_gudang_asal = transfer.gudang_asal
+            old_gudang_tujuan = transfer.gudang_tujuan
+            if is_completed:
+                for item in transfer.items.select_related('produk'):
+                    old_items_data.append({
+                        'produk': item.produk,
+                        'jumlah': item.jumlah,
+                    })
+
+            with db_transaction.atomic():
+                # STEP 1: Rollback stok lama (jika transfer sudah completed)
+                if is_completed and old_items_data:
+                    for old_item in old_items_data:
+                        # Kembalikan stok ke gudang asal (yang tadinya dikurangi)
+                        stok_asal, _ = Stok.objects.select_for_update().get_or_create(
+                            produk=old_item['produk'], gudang=old_gudang_asal,
+                            defaults={'jumlah': 0}
+                        )
+                        stok_asal.jumlah += old_item['jumlah']
+                        stok_asal.save()
+
+                        # Kurangi stok dari gudang tujuan (yang tadinya ditambah)
+                        stok_tujuan, _ = Stok.objects.select_for_update().get_or_create(
+                            produk=old_item['produk'], gudang=old_gudang_tujuan,
+                            defaults={'jumlah': 0}
+                        )
+                        stok_tujuan.jumlah -= old_item['jumlah']
+                        if stok_tujuan.jumlah < 0:
+                            stok_tujuan.jumlah = 0
+                        stok_tujuan.save()
+
+                # STEP 2: Save form dan formset (data baru)
+                self.object = form.save()
+                formset.instance = self.object
+                formset.save()
+
+                # STEP 3: Terapkan stok baru (jika transfer sudah completed)
+                if is_completed:
+                    new_gudang_asal = self.object.gudang_asal
+                    new_gudang_tujuan = self.object.gudang_tujuan
+                    for item in self.object.items.select_related('produk'):
+                        # Kurangi stok di gudang asal baru
+                        stok_asal, _ = Stok.objects.select_for_update().get_or_create(
+                            produk=item.produk, gudang=new_gudang_asal,
+                            defaults={'jumlah': 0}
+                        )
+                        stok_asal.jumlah -= item.jumlah
+                        if stok_asal.jumlah < 0:
+                            stok_asal.jumlah = 0
+                        stok_asal.save()
+
+                        # Tambah stok di gudang tujuan baru
+                        stok_tujuan, _ = Stok.objects.select_for_update().get_or_create(
+                            produk=item.produk, gudang=new_gudang_tujuan,
+                            defaults={'jumlah': 0}
+                        )
+                        stok_tujuan.jumlah += item.jumlah
+                        stok_tujuan.save()
+
+                        # Update cabang produk ke gudang dengan stok terbanyak
+                        produk = item.produk
+                        stok_terbanyak = Stok.objects.filter(
+                            produk=produk, jumlah__gt=0
+                        ).order_by('-jumlah').first()
+
+                        if stok_terbanyak and produk.cabang != stok_terbanyak.gudang:
+                            produk.cabang = stok_terbanyak.gudang
+                            produk.save(update_fields=['cabang'])
 
             # Tampilkan pesan sukses ke user
             messages.success(self.request, f'Transfer Stok {self.object.nomor_transfer} berhasil diupdate')
@@ -486,13 +601,21 @@ def transfer_stok_approve(request, pk):
     """
     Approve transfer stok dan proses update stok.
     URL: /inventory/transfer/<pk>/approve/
+    Permission: Mengecek can_edit pada modul inventory via RBAC
 
     Alur:
-    1. Cek status (harus draft/submitted)
-    2. Jika masih draft → set ke submitted dulu
-    3. Panggil transfer.approve() → update stok gudang asal & tujuan
-    4. Redirect ke halaman detail
+    1. Cek permission RBAC (harus punya can_edit inventory)
+    2. Cek status (harus draft/submitted)
+    3. Jika masih draft → set ke submitted dulu
+    4. Panggil transfer.approve() → update stok gudang asal & tujuan
+    5. Redirect ke halaman detail
     """
+    # Cek permission RBAC - hanya user dengan can_edit inventory yang bisa approve
+    if not request.user.is_superuser:
+        if not has_permission(request.user, 'write', 'inventory', 'transfer_stok'):
+            messages.error(request, 'Anda tidak memiliki izin untuk melakukan approve transfer stok.')
+            return redirect('inventory:transfer')
+
     transfer = get_object_or_404(TransferStok, pk=pk)
 
     if transfer.status not in ['draft', 'submitted']:
@@ -529,9 +652,15 @@ def transfer_stok_approve(request, pk):
 
 class TransferStokDeleteView(DeletePermissionMixin, DeleteView):
     """
-    Hapus transfer stok - hanya bisa jika status masih 'draft'.
+    Hapus transfer stok - bisa dihapus pada semua status.
     URL: /inventory/transfer/<pk>/delete/
     Return: JSON response untuk AJAX
+    Permission: DeletePermissionMixin → cek can_delete untuk modul inventory
+
+    Jika transfer sudah completed, stok akan di-rollback:
+    - Gudang asal: stok dikembalikan (+)
+    - Gudang tujuan: stok dikurangi (-)
+    - Produk.cabang: diupdate ke gudang stok terbanyak
     """
     model = TransferStok
     # URL redirect setelah operasi berhasil
@@ -541,13 +670,47 @@ class TransferStokDeleteView(DeletePermissionMixin, DeleteView):
     permission_sub_module = 'transfer_stok'
 
     def delete(self, request, *args, **kwargs):
-        """Hapus data - return JSON response untuk AJAX."""
+        """Hapus data - rollback stok jika completed, return JSON response."""
         self.object = self.get_object()
 
         # Blok penanganan error - coba jalankan kode di bawah
         try:
-            nomor_transfer = self.object.nomor_transfer
-            self.object.delete()
+            transfer = self.object
+            nomor_transfer = transfer.nomor_transfer
+
+            # Jika transfer sudah completed, rollback stok sebelum hapus
+            if transfer.status == 'completed':
+                with transaction.atomic():
+                    for item in transfer.items.select_related('produk'):
+                        # Kembalikan stok ke gudang asal
+                        stok_asal, _ = Stok.objects.select_for_update().get_or_create(
+                            produk=item.produk, gudang=transfer.gudang_asal,
+                            defaults={'jumlah': 0}
+                        )
+                        stok_asal.jumlah += item.jumlah
+                        stok_asal.save()
+
+                        # Kurangi stok dari gudang tujuan
+                        stok_tujuan, _ = Stok.objects.select_for_update().get_or_create(
+                            produk=item.produk, gudang=transfer.gudang_tujuan,
+                            defaults={'jumlah': 0}
+                        )
+                        stok_tujuan.jumlah -= item.jumlah
+                        if stok_tujuan.jumlah < 0:
+                            stok_tujuan.jumlah = 0
+                        stok_tujuan.save()
+
+                        # Update cabang produk ke gudang dengan stok terbanyak
+                        produk = item.produk
+                        stok_terbanyak = Stok.objects.filter(
+                            produk=produk, jumlah__gt=0
+                        ).order_by('-jumlah').first()
+
+                        if stok_terbanyak and produk.cabang != stok_terbanyak.gudang:
+                            produk.cabang = stok_terbanyak.gudang
+                            produk.save(update_fields=['cabang'])
+
+            transfer.delete()
             return JsonResponse({
                 'success': True,
                 'message': f'Transfer Stok {nomor_transfer} berhasil dihapus'
@@ -559,6 +722,78 @@ class TransferStokDeleteView(DeletePermissionMixin, DeleteView):
             return JsonResponse({
                 'success': False,
                 'message': f'Gagal menghapus transfer stok: {str(e)}'
+            }, status=400)
+
+
+class AdjustmentStokDeleteView(DeletePermissionMixin, DeleteView):
+    """
+    Hapus adjustment stok dengan rollback stok otomatis.
+    URL: /inventory/adjustment/<pk>/delete/
+    Return: JSON response untuk AJAX
+
+    Saat dihapus:
+    - Tipe 'in' (penambahan): stok dikurangi kembali
+    - Tipe 'out' (pengurangan): stok dikembalikan
+    - Produk.cabang: diupdate ke gudang stok terbanyak
+    """
+    model = AdjustmentStok
+    success_url = reverse_lazy('inventory:adjustment')
+    permission_module = 'inventory'
+    permission_sub_module = 'adjustment_stok'
+
+    def delete(self, request, *args, **kwargs):
+        """Hapus adjustment - rollback stok, return JSON response."""
+        self.object = self.get_object()
+
+        try:
+            adjustment = self.object
+            nomor = adjustment.nomor_adjustment
+
+            with transaction.atomic():
+                # Rollback stok: kebalikan dari operasi adjustment awal
+                stok, _ = Stok.objects.select_for_update().get_or_create(
+                    produk=adjustment.produk, gudang=adjustment.gudang,
+                    defaults={'jumlah': 0}
+                )
+
+                if adjustment.tipe == 'in':
+                    # Adjustment tambah → rollback = kurangi stok
+                    stok.jumlah -= adjustment.jumlah
+                    if stok.jumlah < 0:
+                        stok.jumlah = 0
+                else:
+                    # Adjustment kurang → rollback = tambah stok
+                    stok.jumlah += adjustment.jumlah
+
+                stok.save()
+
+                # Update cabang produk ke gudang dengan stok terbanyak
+                produk = adjustment.produk
+                stok_terbanyak = Stok.objects.filter(
+                    produk=produk, jumlah__gt=0
+                ).order_by('-jumlah').first()
+
+                if stok_terbanyak:
+                    if produk.cabang != stok_terbanyak.gudang:
+                        produk.cabang = stok_terbanyak.gudang
+                        produk.save(update_fields=['cabang'])
+                else:
+                    # Tidak ada stok di gudang manapun → cabang NULL
+                    if produk.cabang is not None:
+                        produk.cabang = None
+                        produk.save(update_fields=['cabang'])
+
+            adjustment.delete()
+            return JsonResponse({
+                'success': True,
+                'message': f'Adjustment Stok {nomor} berhasil dihapus dan stok telah di-rollback'
+            })
+        except ProtectedError:
+            return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Gagal menghapus adjustment stok: {str(e)}'
             }, status=400)
 
 

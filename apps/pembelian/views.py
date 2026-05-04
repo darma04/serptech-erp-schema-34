@@ -319,6 +319,7 @@ class PurchaseOrderCreateView(CreatePermissionMixin, CreateView):
                 satuan=satuan,
                 harga_beli=harga_satuan,
                 harga_jual=harga_satuan * Decimal('1.2'),  # Markup 20%
+                cabang=po.gudang,  # Set cabang ke gudang tujuan PO
                 aktif=True,
                 dibuat_oleh=self.request.user
             )
@@ -521,6 +522,7 @@ class PurchaseOrderDeleteView(DeletePermissionMixin, DeleteView):
         from django.http import JsonResponse
         # Import dari modul internal proyek
         from apps.produk.models import Stok
+        from apps.fraud_detection.signals import set_current_delete_user, clear_current_delete_user
         
         self.object = self.get_object()
         po = self.object
@@ -561,7 +563,9 @@ class PurchaseOrderDeleteView(DeletePermissionMixin, DeleteView):
                         orphan_products.append(item.produk.pk)
                 
             # 2. Hapus PO dulu (items CASCADE otomatis → FK ke produk terlepas)
+            set_current_delete_user(request.user)
             po.delete()
+            clear_current_delete_user()
             
             # 3. Hapus produk orphan SETELAH PO & items sudah dihapus
             from apps.produk.models import Produk
@@ -570,8 +574,10 @@ class PurchaseOrderDeleteView(DeletePermissionMixin, DeleteView):
             
             return JsonResponse({'success': True, 'message': 'Purchase Order berhasil dihapus'})
         except ProtectedError:
+            clear_current_delete_user()
             return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
         except Exception as e:
+            clear_current_delete_user()
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
 
 

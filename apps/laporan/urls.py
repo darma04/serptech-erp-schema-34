@@ -45,4 +45,7 @@ urlpatterns = [
 
     # ── Laporan Keuangan ─────────────────────────────────────
     path('keuangan/', views.LaporanKeuanganView.as_view(), name='keuangan'),
+
+    # ── Laporan Cabang ───────────────────────────────────────────────
+    path('cabang/', views.LaporanCabangView.as_view(), name='cabang'),
 ]

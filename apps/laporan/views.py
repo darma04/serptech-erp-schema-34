@@ -102,6 +102,8 @@ class LaporanProdukView(ReadPermissionMixin, ListView):
         from apps.penjualan.models import SalesOrderItem
         # Import dari modul internal proyek
         from apps.pos.models import POSTransactionItem
+        # DIPERBAIKI (BUG-01): Import AdjustmentStok untuk menyertakan adj_out dalam Total Aset
+        from apps.inventory.models import AdjustmentStok
         
         # Parse filter params for date filtering
         start_date_str = self.request.GET.get('start_date', '')
@@ -150,8 +152,16 @@ class LaporanProdukView(ReadPermissionMixin, ListView):
         
         pos_sold_by_produk = {}
         # Query database — ambil data for item in POSTransactionItem.objects.filter(pos_sold_filter).values('produk_id').annotate(total_qty yang sesuai filter
-        for item in POSTransactionItem.objects.filter(pos_sold_filter).values('produk_id').annotate(total_qty=Sum('jumlah')):
+        for item in POSTransactionItem.objects.filter(pos_sold_filter).values('produk_id').annotate(total_qty=Sum('jumlah_konversi')):
             pos_sold_by_produk[item['produk_id']] = item['total_qty']
+        
+        # DIPERBAIKI (BUG-01): Qty adjustment out per produk (kumulatif historis)
+        # Sinkron dengan rumus di LaporanKeuanganView
+        adj_out_by_produk = {}
+        for item in AdjustmentStok.objects.filter(
+            tipe='out'
+        ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+            adj_out_by_produk[item['produk_id']] = item['total_qty']
         
         # ===== Hitung semua cards =====
         total_keseluruhan_aset = Decimal('0')
@@ -165,10 +175,12 @@ class LaporanProdukView(ReadPermissionMixin, ListView):
         for produk in Produk.objects.prefetch_related('stok_set').all():
             stok_saat_ini = sum(s.jumlah for s in produk.stok_set.all())
             
-            # Qty yang sudah terjual (SO + POS)
+            # Qty yang sudah terjual (SO + POS) + keluar via adjustment
             qty_sold_so = so_sold_by_produk.get(produk.pk, Decimal('0'))
             qty_sold_pos = pos_sold_by_produk.get(produk.pk, Decimal('0'))
-            qty_total_pernah_masuk = stok_saat_ini + qty_sold_so + qty_sold_pos
+            # DIPERBAIKI (BUG-01): Sertakan adj_out agar sinkron dengan Laporan Keuangan
+            qty_adj_out = adj_out_by_produk.get(produk.pk, Decimal('0'))
+            qty_total_pernah_masuk = stok_saat_ini + qty_sold_so + qty_sold_pos + qty_adj_out
             
             # Card 1: Total Keseluruhan Aset = harga_beli × total stok pernah masuk
             total_keseluruhan_aset += produk.harga_beli * qty_total_pernah_masuk
@@ -305,8 +317,12 @@ class LaporanPenjualanView(ReadPermissionMixin, ListView):
                 pass
         
         # ===== Build filter kwargs =====
-        so_filter = {'status__in': ['draft', 'confirmed', 'delivered', 'completed']}
-        pos_filter = {'status__in': ['draft', 'unpaid', 'paid']}
+        # DIPERBAIKI (BUG-02): Ketatkan filter status agar sinkron dengan Laporan Keuangan & Dashboard
+        # Sebelumnya: SO menyertakan 'draft', POS menyertakan 'draft' dan 'unpaid'
+        # Draft = belum dikonfirmasi (stok belum berkurang, uang belum diterima)
+        # Unpaid = belum dibayar (transaksi belum final)
+        so_filter = {'status__in': ['confirmed', 'delivered', 'completed']}
+        pos_filter = {'status': 'paid'}
         if filter_start:
             so_filter['tanggal__date__gte'] = filter_start
             pos_filter['tanggal__date__gte'] = filter_start
@@ -347,7 +363,7 @@ class LaporanPenjualanView(ReadPermissionMixin, ListView):
         for pos in pos_qs:
             harga_beli_pos = Decimal('0')
             for item in pos.items.all():
-                harga_beli_pos += item.produk.harga_beli * item.jumlah
+                harga_beli_pos += item.produk.harga_beli * item.jumlah_konversi
             keuntungan_pos = pos.total_harga - harga_beli_pos
             pos.harga_beli_calc = harga_beli_pos
             pos.keuntungan_calc = keuntungan_pos
@@ -498,6 +514,42 @@ class LaporanPembelianView(ReadPermissionMixin, ListView):
         # Override queryset with annotated version
         context['purchase_order_list'] = po_list_annotated
         
+        # Tambahkan total pengeluaran produk (Tambah Produk / Import Produk)
+        # DIPERBAIKI: Menggunakan qty HISTORIS (sinkron dengan Laporan Keuangan)
+        from decimal import Decimal as Dec
+        from apps.penjualan.models import SalesOrderItem as SOItem
+        from apps.pos.models import POSTransactionItem as POSItem
+        from apps.inventory.models import AdjustmentStok
+        total_produk_pengeluaran = Dec('0')
+        try:
+            # Pre-fetch qty terjual dan adj_out (kumulatif historis)
+            so_sold_map = {}
+            for item in SOItem.objects.filter(
+                sales_order__status__in=['confirmed', 'delivered', 'completed']
+            ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+                so_sold_map[item['produk_id']] = item['total_qty']
+            
+            pos_sold_map = {}
+            for item in POSItem.objects.filter(
+                transaction__status='paid'
+            ).values('produk_id').annotate(total_qty=Sum('jumlah_konversi')):
+                pos_sold_map[item['produk_id']] = item['total_qty']
+            
+            adj_out_map = {}
+            for item in AdjustmentStok.objects.filter(
+                tipe='out'
+            ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+                adj_out_map[item['produk_id']] = item['total_qty']
+            
+            for p in Produk.objects.filter(metode_pembayaran__isnull=False).prefetch_related('stok_set'):
+                stok_saat_ini = sum(s.jumlah for s in p.stok_set.all())
+                qty_historis = stok_saat_ini + so_sold_map.get(p.pk, Dec('0')) + pos_sold_map.get(p.pk, Dec('0')) + adj_out_map.get(p.pk, Dec('0'))
+                total_produk_pengeluaran += p.harga_beli * qty_historis
+        except Exception:
+            pass
+        context['total_produk_pengeluaran'] = total_produk_pengeluaran
+        context['total_keseluruhan_pembelian'] = total_pembelian + total_produk_pengeluaran
+        
         return context
 
 
@@ -567,7 +619,7 @@ class LaporanKeuanganView(ReadPermissionMixin, TemplateView):
         # yang salah karena PO tidak memiliki status 'confirmed' maupun 'completed'.
         # Status alur PO yang benar: draft → approved → received
         po_filter = {'status__in': ['approved', 'received']}
-        biaya_filter = {'status': 'approved'}  # Hanya biaya yang disetujui = pengeluaran nyata
+        biaya_filter = {'status': 'approved'}  # Hanya biaya yang sudah disetujui = pengeluaran nyata
         
         if filter_start:
             so_filter['tanggal__date__gte'] = filter_start
@@ -606,7 +658,7 @@ class LaporanKeuanganView(ReadPermissionMixin, TemplateView):
         
         total_pemasukan = total_sales_order + total_pos
         
-        # Pengeluaran dari pembelian + biaya
+        # Pengeluaran dari pembelian + biaya + produk
         total_pembelian = PurchaseOrder.objects.filter(
             **po_filter
         ).aggregate(Sum('total_harga'))['total_harga__sum'] or 0
@@ -614,7 +666,57 @@ class LaporanKeuanganView(ReadPermissionMixin, TemplateView):
         total_biaya = TransaksiBiaya.objects.filter(
             **biaya_filter
         ).aggregate(Sum('jumlah'))['jumlah__sum'] or 0
-        total_pengeluaran = total_pembelian + total_biaya
+        
+        # Sumber pengeluaran 3: Pembelian Produk (Tambah Produk / Import Produk)
+        # DIPERBAIKI: Menggunakan qty HISTORIS (stok + terjual + adj_out) bukan stok saat ini
+        # Alasan: Modal yang sudah keluar bersifat TETAP, tidak berkurang saat barang terjual.
+        # Sebelumnya: harga_beli × stok_saat_ini → nominal pengeluaran menyusut saat barang terjual (BUG)
+        # Sekarang: harga_beli × qty_total_pernah_masuk → nominal pengeluaran tetap historis
+        from decimal import Decimal as Dec
+        from decimal import Decimal
+        from apps.produk.models import Stok
+        from apps.penjualan.models import SalesOrderItem
+        from apps.pos.models import POSTransactionItem
+        from apps.inventory.models import AdjustmentStok
+        total_produk_pengeluaran = Dec('0')
+        produk_filter = {'metode_pembayaran__isnull': False}
+        if metode_id:
+            produk_filter['metode_pembayaran_id'] = metode_id
+        if cabang_id:
+            produk_filter['cabang_id'] = cabang_id
+        try:
+            # Pre-fetch qty terjual dan adj_out per produk (kumulatif historis)
+            so_sold_map = {}
+            for item in SalesOrderItem.objects.filter(
+                sales_order__status__in=['confirmed', 'delivered', 'completed']
+            ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+                so_sold_map[item['produk_id']] = item['total_qty']
+            
+            pos_sold_map = {}
+            for item in POSTransactionItem.objects.filter(
+                transaction__status='paid'
+            ).values('produk_id').annotate(total_qty=Sum('jumlah_konversi')):
+                pos_sold_map[item['produk_id']] = item['total_qty']
+            
+            adj_out_map = {}
+            for item in AdjustmentStok.objects.filter(
+                tipe='out'
+            ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+                adj_out_map[item['produk_id']] = item['total_qty']
+            
+            produk_qs = Produk.objects.filter(**produk_filter).prefetch_related('stok_set')
+            for p in produk_qs:
+                stok_saat_ini = sum(s.jumlah for s in p.stok_set.all())
+                qty_sold_so = so_sold_map.get(p.pk, Dec('0'))
+                qty_sold_pos = pos_sold_map.get(p.pk, Dec('0'))
+                qty_adj_out = adj_out_map.get(p.pk, Dec('0'))
+                # Qty historis = stok sekarang + yang sudah terjual + yang keluar via adjustment
+                qty_historis = stok_saat_ini + qty_sold_so + qty_sold_pos + qty_adj_out
+                total_produk_pengeluaran += p.harga_beli * qty_historis
+        except Exception:
+            pass
+        
+        total_pengeluaran = total_pembelian + total_biaya + total_produk_pengeluaran
         
         # Laba/rugi
         laba_rugi = total_pemasukan - total_pengeluaran
@@ -623,11 +725,8 @@ class LaporanKeuanganView(ReadPermissionMixin, TemplateView):
         # Total Aset = harga_beli × semua qty yang pernah masuk (stok + terjual + adj_out)
         # Tidak dipengaruhi filter tanggal — bersifat kumulatif historis
         # Menjadi patokan untuk deteksi kecurangan/selisih
-        from apps.produk.models import Produk, Stok
-        from apps.penjualan.models import SalesOrderItem
-        from apps.pos.models import POSTransactionItem
-        from apps.inventory.models import AdjustmentStok
-        from decimal import Decimal
+        # NOTE: Produk, Stok, SalesOrderItem, POSTransactionItem, AdjustmentStok, Decimal
+        # sudah di-import di atas (sebelum produk_pengeluaran calc)
         
         total_aset = Decimal('0')
         total_harga_beli_ready = Decimal('0')
@@ -645,7 +744,7 @@ class LaporanKeuanganView(ReadPermissionMixin, TemplateView):
             pos_sold_by_produk = {}
             for item in POSTransactionItem.objects.filter(
                 transaction__status='paid'
-            ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+            ).values('produk_id').annotate(total_qty=Sum('jumlah_konversi')):
                 pos_sold_by_produk[item['produk_id']] = item['total_qty']
             
             # Qty adjustment out per produk (kumulatif historis)
@@ -710,7 +809,7 @@ class LaporanKeuanganView(ReadPermissionMixin, TemplateView):
                 **ke_pos_filter
             ).annotate(
                 margin=ExpressionWrapper(
-                    (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah'),
+                    (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah_konversi'),
                     output_field=DecimalField()
                 )
             ).aggregate(total=Sum('margin'))['total'] or Decimal('0')
@@ -740,13 +839,15 @@ class LaporanKeuanganView(ReadPermissionMixin, TemplateView):
         context['total_harga_jual_ready'] = total_harga_jual_ready
         context['estimasi_keuntungan'] = estimasi_keuntungan
         context['keuntungan_kotor'] = keuntungan_kotor
+        # Data konteks: total_produk_pengeluaran — pengeluaran dari pembelian produk
+        context['total_produk_pengeluaran'] = total_produk_pengeluaran
         
         # List data — with all filters applied + select_related for new columns
         # DIPERBAIKI: Tambahkan filter status agar list konsisten dengan summary cards
         so_list_filter = {'status__in': ['confirmed', 'delivered', 'completed']}
         pos_list_filter = {'status': 'paid'}
         po_list_filter = {'status__in': ['approved', 'received']}
-        biaya_list_filter = {'status': 'approved'}  # Hanya tampilkan biaya yang disetujui
+        biaya_list_filter = {'status': 'approved'}  # Hanya biaya yang sudah disetujui
         if filter_start:
             so_list_filter['tanggal__date__gte'] = filter_start
             pos_list_filter['tanggal__date__gte'] = filter_start
@@ -791,6 +892,29 @@ class LaporanKeuanganView(ReadPermissionMixin, TemplateView):
         context['transaksi_biaya_list'] = TransaksiBiaya.objects.filter(
             **biaya_list_filter
         ).select_related('cabang', 'metode_pembayaran', 'kategori').order_by('-tanggal')[:100]
+        
+        # Produk yang punya metode_pembayaran — tampil di tabel pengeluaran
+        produk_list_filter = {'metode_pembayaran__isnull': False}
+        if cabang_id:
+            produk_list_filter['cabang_id'] = cabang_id
+        if metode_id:
+            produk_list_filter['metode_pembayaran_id'] = metode_id
+        produk_qs = Produk.objects.filter(
+            **produk_list_filter
+        ).select_related('cabang', 'metode_pembayaran', 'kategori').prefetch_related('stok_set')[:100]
+        # Annotate: total_pengeluaran_produk = harga_beli × qty_historis
+        # DIPERBAIKI: Menggunakan qty historis (bukan stok_total saja)
+        produk_annotated = []
+        _so_map = locals().get('so_sold_map', {})
+        _pos_map = locals().get('pos_sold_map', {})
+        _adj_map = locals().get('adj_out_map', {})
+        for p in produk_qs:
+            stok_saat_ini = p.stok_total
+            qty_historis = stok_saat_ini + _so_map.get(p.pk, Dec('0')) + _pos_map.get(p.pk, Dec('0')) + _adj_map.get(p.pk, Dec('0'))
+            p.qty_historis = qty_historis
+            p.total_pengeluaran_produk = p.harga_beli * qty_historis
+            produk_annotated.append(p)
+        context['produk_pengeluaran_list'] = produk_annotated
         
         return context
 
@@ -966,4 +1090,373 @@ class LaporanStokDetailView(ReadPermissionMixin, DetailView):
             items__produk=stok.produk
         ).distinct().order_by('-dibuat_pada')[:20]
         
+        return context
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+# ║              LAPORAN CABANG / GUDANG                          ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+class LaporanCabangView(ReadPermissionMixin, TemplateView):
+    """
+    Laporan Cabang/Gudang — Analitik performa per cabang.
+    URL: /laporan/cabang/
+    Filter: cabang (wajib), start_date, end_date
+    4 Kategori Data:
+      1. Pemasukan (SO + POS)
+      2. Pengeluaran (PO + Biaya)
+      3. Inventori & Mutasi (Stok, Transfer, Adjustment)
+      4. Laba/Rugi Cabang
+      5. Leaderboard (Top Produk, Top Kasir)
+    """
+    template_name = 'laporan/cabang.html'
+    permission_module = 'laporan'
+    permission_sub_module = 'laporan_cabang'
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        from datetime import datetime
+        from decimal import Decimal
+
+        # === Daftar gudang untuk dropdown filter ===
+        context['gudang_list'] = Gudang.objects.filter(aktif=True)
+
+        # === Parse filter params ===
+        cabang_id = self.request.GET.get('cabang', '')
+        start_date_str = self.request.GET.get('start_date', '')
+        end_date_str = self.request.GET.get('end_date', '')
+        context['filter_cabang'] = cabang_id
+        context['filter_start_date'] = start_date_str
+        context['filter_end_date'] = end_date_str
+
+        filter_start = None
+        filter_end = None
+        if start_date_str:
+            try:
+                filter_start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if end_date_str:
+            try:
+                filter_end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        # Template cetak untuk export Excel/PDF
+        from apps.pengaturan.models import TemplateCetak
+        try:
+            context['export_pdf_template'] = TemplateCetak.objects.first()
+        except Exception:
+            context['export_pdf_template'] = None
+
+        # Jika belum ada cabang dipilih, sediakan data ringkasan semua cabang
+        if not cabang_id:
+            context['selected_gudang'] = None
+
+            # === Data summary SEMUA cabang untuk tabel awal ===
+            from apps.pos.models import POSTransaction
+            summary_cabang = []
+            for gudang in context['gudang_list']:
+                gid = gudang.pk
+                # Jumlah produk yang punya stok di gudang ini
+                stok_qs_all = Stok.objects.filter(gudang_id=gid)
+                jml_produk = stok_qs_all.count()
+                total_unit_stok = stok_qs_all.aggregate(t=Sum('jumlah'))['t'] or 0
+
+                # Nilai aset
+                nilai_aset = Decimal('0')
+                for si in stok_qs_all.select_related('produk'):
+                    nilai_aset += si.produk.harga_beli * si.jumlah
+
+                # Transaksi POS di cabang ini
+                jml_trx_pos = POSTransaction.objects.filter(gudang_id=gid, status='paid').count()
+                # SO di cabang ini
+                jml_trx_so = SalesOrder.objects.filter(gudang_id=gid, status__in=['confirmed', 'delivered', 'completed']).count()
+                # PO di cabang ini
+                jml_trx_po = PurchaseOrder.objects.filter(gudang_id=gid, status__in=['approved', 'received']).count()
+
+                # Total Pemasukan
+                pemasukan_so = SalesOrder.objects.filter(
+                    gudang_id=gid, status__in=['confirmed', 'delivered', 'completed']
+                ).aggregate(t=Sum('total_harga'))['t'] or Decimal('0')
+                pemasukan_pos = POSTransaction.objects.filter(
+                    gudang_id=gid, status='paid'
+                ).aggregate(t=Sum('total_harga'))['t'] or Decimal('0')
+                total_pemasukan = pemasukan_so + pemasukan_pos
+
+                # Total Pengeluaran
+                pengeluaran_po = PurchaseOrder.objects.filter(
+                    gudang_id=gid, status__in=['approved', 'received']
+                ).aggregate(t=Sum('total_harga'))['t'] or Decimal('0')
+                pengeluaran_biaya = TransaksiBiaya.objects.filter(
+                    cabang_id=gid, status='approved'
+                ).aggregate(t=Sum('jumlah'))['t'] or Decimal('0')
+                total_pengeluaran = pengeluaran_po + pengeluaran_biaya
+
+                summary_cabang.append({
+                    'nama': gudang.nama,
+                    'kode': gudang.kode,
+                    'pk': gudang.pk,
+                    'jml_produk': jml_produk,
+                    'total_unit_stok': int(total_unit_stok),
+                    'nilai_aset': nilai_aset,
+                    'jml_trx_pos': jml_trx_pos,
+                    'jml_trx_so': jml_trx_so,
+                    'jml_trx_po': jml_trx_po,
+                    'total_pemasukan': total_pemasukan,
+                    'total_pengeluaran': total_pengeluaran,
+                    'laba_rugi': total_pemasukan - total_pengeluaran,
+                })
+
+            context['summary_cabang'] = summary_cabang
+            return context
+
+        # Ambil objek gudang
+        try:
+            selected_gudang = Gudang.objects.get(pk=cabang_id)
+        except Gudang.DoesNotExist:
+            context['selected_gudang'] = None
+            return context
+
+        context['selected_gudang'] = selected_gudang
+
+        # ════════════════════════════════════════════════════════
+        # 1. PEMASUKAN CABANG (SO + POS)
+        # ════════════════════════════════════════════════════════
+        from apps.pos.models import POSTransaction
+
+        # Sales Order
+        so_filter = {
+            'status__in': ['confirmed', 'delivered', 'completed'],
+            'gudang_id': cabang_id,
+        }
+        if filter_start:
+            so_filter['tanggal__date__gte'] = filter_start
+        if filter_end:
+            so_filter['tanggal__date__lte'] = filter_end
+
+        total_so_cabang = SalesOrder.objects.filter(
+            **so_filter
+        ).aggregate(total=Sum('total_harga'))['total'] or Decimal('0')
+        so_count = SalesOrder.objects.filter(**so_filter).count()
+
+        # POS Transaction
+        pos_filter = {
+            'status': 'paid',
+            'gudang_id': cabang_id,
+        }
+        if filter_start:
+            pos_filter['tanggal__date__gte'] = filter_start
+        if filter_end:
+            pos_filter['tanggal__date__lte'] = filter_end
+
+        total_pos_cabang = POSTransaction.objects.filter(
+            **pos_filter
+        ).aggregate(total=Sum('total_harga'))['total'] or Decimal('0')
+        pos_count = POSTransaction.objects.filter(**pos_filter).count()
+
+        total_pemasukan_cabang = total_so_cabang + total_pos_cabang
+
+        context['total_so_cabang'] = total_so_cabang
+        context['so_count'] = so_count
+        context['total_pos_cabang'] = total_pos_cabang
+        context['pos_count'] = pos_count
+        context['total_pemasukan_cabang'] = total_pemasukan_cabang
+
+        # ════════════════════════════════════════════════════════
+        # 2. PENGELUARAN CABANG (PO + Biaya)
+        # ════════════════════════════════════════════════════════
+
+        # Purchase Order
+        po_filter = {
+            'status__in': ['approved', 'received'],
+            'gudang_id': cabang_id,
+        }
+        if filter_start:
+            po_filter['tanggal__date__gte'] = filter_start
+        if filter_end:
+            po_filter['tanggal__date__lte'] = filter_end
+
+        total_po_cabang = PurchaseOrder.objects.filter(
+            **po_filter
+        ).aggregate(total=Sum('total_harga'))['total'] or Decimal('0')
+        po_count = PurchaseOrder.objects.filter(**po_filter).count()
+
+        # Transaksi Biaya
+        biaya_filter = {
+            'status': 'approved',
+            'cabang_id': cabang_id,
+        }
+        if filter_start:
+            biaya_filter['tanggal__gte'] = filter_start
+        if filter_end:
+            biaya_filter['tanggal__lte'] = filter_end
+
+        total_biaya_cabang = TransaksiBiaya.objects.filter(
+            **biaya_filter
+        ).aggregate(total=Sum('jumlah'))['total'] or Decimal('0')
+        biaya_count = TransaksiBiaya.objects.filter(**biaya_filter).count()
+
+        # DIPERBAIKI (BUG-03): Pengeluaran produk menggunakan qty HISTORIS
+        # Sebelumnya: harga_beli × stok_saat_ini → menyusut saat barang terjual (BUG)
+        # Sekarang: harga_beli × qty_historis → tetap historis (sinkron Laporan Keuangan)
+        from apps.penjualan.models import SalesOrderItem as _SOItem
+        from apps.pos.models import POSTransactionItem as _POSItem
+        from apps.inventory.models import AdjustmentStok as _AdjStok
+        
+        # Pre-fetch qty terjual & adj_out per produk di cabang ini (kumulatif historis)
+        _so_sold = {}
+        for _item in _SOItem.objects.filter(
+            sales_order__status__in=['confirmed', 'delivered', 'completed'],
+            sales_order__gudang_id=cabang_id
+        ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+            _so_sold[_item['produk_id']] = _item['total_qty']
+        
+        _pos_sold = {}
+        for _item in _POSItem.objects.filter(
+            transaction__status='paid',
+            transaction__gudang_id=cabang_id
+        ).values('produk_id').annotate(total_qty=Sum('jumlah_konversi')):
+            _pos_sold[_item['produk_id']] = _item['total_qty']
+        
+        _adj_out = {}
+        for _item in _AdjStok.objects.filter(
+            tipe='out',
+            gudang_id=cabang_id
+        ).values('produk_id').annotate(total_qty=Sum('jumlah')):
+            _adj_out[_item['produk_id']] = _item['total_qty']
+        
+        stok_produk_qs = Stok.objects.filter(
+            gudang_id=cabang_id
+        ).select_related('produk')
+        total_tambah_produk = Decimal('0')
+        tambah_produk_count = stok_produk_qs.count()
+        for sp in stok_produk_qs:
+            stok_now = sp.jumlah
+            qty_so = _so_sold.get(sp.produk_id, Decimal('0'))
+            qty_pos = _pos_sold.get(sp.produk_id, Decimal('0'))
+            qty_adj = _adj_out.get(sp.produk_id, Decimal('0'))
+            qty_historis = stok_now + qty_so + qty_pos + qty_adj
+            total_tambah_produk += sp.produk.harga_beli * qty_historis
+
+        total_pengeluaran_cabang = total_po_cabang + total_biaya_cabang + total_tambah_produk
+
+        context['total_po_cabang'] = total_po_cabang
+        context['po_count'] = po_count
+        context['total_biaya_cabang'] = total_biaya_cabang
+        context['biaya_count'] = biaya_count
+        context['total_tambah_produk'] = total_tambah_produk
+        context['tambah_produk_count'] = tambah_produk_count
+        context['total_pengeluaran_cabang'] = total_pengeluaran_cabang
+
+        # ════════════════════════════════════════════════════════
+        # 3. INVENTORI & MUTASI
+        # ════════════════════════════════════════════════════════
+
+        # Stok di gudang ini
+        stok_qs = Stok.objects.filter(gudang_id=cabang_id).select_related('produk')
+        total_item_stok = stok_qs.count()
+        total_stok_qty = stok_qs.aggregate(total=Sum('jumlah'))['total'] or Decimal('0')
+
+        # Nilai aset gudang ini: sum(harga_beli × jumlah) per stok
+        total_aset_cabang = Decimal('0')
+        total_nilai_jual_cabang = Decimal('0')
+        for stok_item in stok_qs:
+            total_aset_cabang += stok_item.produk.harga_beli * stok_item.jumlah
+            total_nilai_jual_cabang += stok_item.produk.harga_jual * stok_item.jumlah
+
+        # Transfer masuk/keluar
+        transfer_in_count = 0
+        transfer_out_count = 0
+        adjustment_count = 0
+        try:
+            from apps.inventory.models import TransferStok, AdjustmentStok
+            transfer_in_filter = {'gudang_tujuan_id': cabang_id}
+            transfer_out_filter = {'gudang_asal_id': cabang_id}
+            adj_filter = {'gudang_id': cabang_id}
+            if filter_start:
+                transfer_in_filter['dibuat_pada__date__gte'] = filter_start
+                transfer_out_filter['dibuat_pada__date__gte'] = filter_start
+                adj_filter['dibuat_pada__date__gte'] = filter_start
+            if filter_end:
+                transfer_in_filter['dibuat_pada__date__lte'] = filter_end
+                transfer_out_filter['dibuat_pada__date__lte'] = filter_end
+                adj_filter['dibuat_pada__date__lte'] = filter_end
+            transfer_in_count = TransferStok.objects.filter(**transfer_in_filter).count()
+            transfer_out_count = TransferStok.objects.filter(**transfer_out_filter).count()
+            adjustment_count = AdjustmentStok.objects.filter(**adj_filter).count()
+        except Exception:
+            pass
+
+        context['total_item_stok'] = total_item_stok
+        context['total_stok_qty'] = int(total_stok_qty)
+        context['total_aset_cabang'] = total_aset_cabang
+        context['total_nilai_jual_cabang'] = total_nilai_jual_cabang
+        context['transfer_in_count'] = transfer_in_count
+        context['transfer_out_count'] = transfer_out_count
+        context['adjustment_count'] = adjustment_count
+
+        # ════════════════════════════════════════════════════════
+        # 4. LABA/RUGI CABANG
+        # ════════════════════════════════════════════════════════
+        laba_rugi_cabang = total_pemasukan_cabang - total_pengeluaran_cabang
+        context['laba_rugi_cabang'] = laba_rugi_cabang
+
+        # ════════════════════════════════════════════════════════
+        # 5. LEADERBOARD
+        # ════════════════════════════════════════════════════════
+        from apps.penjualan.models import SalesOrderItem
+        from apps.pos.models import POSTransactionItem
+
+        # Top 5 Produk Terlaris di cabang ini (dari SO + POS)
+        so_item_filter = {
+            'sales_order__gudang_id': cabang_id,
+            'sales_order__status__in': ['confirmed', 'delivered', 'completed'],
+        }
+        pos_item_filter = {
+            'transaction__gudang_id': cabang_id,
+            'transaction__status': 'paid',
+        }
+        if filter_start:
+            so_item_filter['sales_order__tanggal__date__gte'] = filter_start
+            pos_item_filter['transaction__tanggal__date__gte'] = filter_start
+        if filter_end:
+            so_item_filter['sales_order__tanggal__date__lte'] = filter_end
+            pos_item_filter['transaction__tanggal__date__lte'] = filter_end
+
+        # Gabungkan qty terjual per item dari SO dan POS
+        all_items_qty = {}
+        for item in SalesOrderItem.objects.filter(**so_item_filter).values('produk__nama', 'produk__sku').annotate(total_qty=Sum('jumlah')):
+            key = item['produk__nama']
+            all_items_qty[key] = {
+                'nama': item['produk__nama'],
+                'sku': item['produk__sku'],
+                'qty': item['total_qty'] or Decimal('0'),
+            }
+        for item in POSTransactionItem.objects.filter(**pos_item_filter).values('produk__nama', 'produk__sku').annotate(total_qty=Sum('jumlah')):
+            key = item['produk__nama']
+            if key in all_items_qty:
+                all_items_qty[key]['qty'] += item['total_qty'] or Decimal('0')
+            else:
+                all_items_qty[key] = {
+                    'nama': item['produk__nama'],
+                    'sku': item['produk__sku'],
+                    'qty': item['total_qty'] or Decimal('0'),
+                }
+
+        # Top 5 Produk Terlaris
+        top_produk = sorted(all_items_qty.values(), key=lambda x: x['qty'], reverse=True)[:5]
+        context['top_produk_cabang'] = top_produk
+
+        # Top 5 Kasir
+        top_kasir = POSTransaction.objects.filter(
+            **pos_filter
+        ).values(
+            'kasir__username', 'kasir__first_name', 'kasir__last_name'
+        ).annotate(
+            total_trx=Count('id'),
+            total_nominal=Sum('total_harga')
+        ).order_by('-total_trx')[:5]
+        context['top_kasir_cabang'] = top_kasir
+
         return context

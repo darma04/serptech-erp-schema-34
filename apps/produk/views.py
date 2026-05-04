@@ -867,6 +867,19 @@ class ProdukImportView(SubModulePermissionMixin, TemplateView):
                         error_count += 1
                         continue
 
+                    # Tentukan metode pembayaran dari file import atau default
+                    metode_pembayaran = None
+                    metode_nama = str(row.get('metode_pembayaran', '')).strip() if row.get('metode_pembayaran') else ''
+                    if metode_nama:
+                        from apps.pos.models import MetodePembayaran
+                        metode_pembayaran = MetodePembayaran.objects.filter(
+                            nama__iexact=metode_nama, aktif=True
+                        ).first()
+                    if not metode_pembayaran:
+                        # Fallback: gunakan metode pembayaran default pertama yang aktif
+                        from apps.pos.models import MetodePembayaran
+                        metode_pembayaran = MetodePembayaran.objects.filter(aktif=True).first()
+
                     # Buat produk baru
                     produk = Produk.objects.create(
                         sku=sku or '',
@@ -878,7 +891,8 @@ class ProdukImportView(SubModulePermissionMixin, TemplateView):
                         harga_jual=float(row.get('harga_jual', 0) or 0),
                         barcode=str(row.get('barcode', '')).strip() if row.get('barcode') else '',
                         aktif=True,
-                        dibuat_oleh=request.user
+                        dibuat_oleh=request.user,
+                        metode_pembayaran=metode_pembayaran
                     )
 
                     # Tangani stok jika ada di file import

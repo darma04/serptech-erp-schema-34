@@ -68,6 +68,34 @@ logger = logging.getLogger(__name__)
 #   fraud_signals._BYPASS_FRAUD_SIGNALS = False  # nyalakan kembali
 _BYPASS_FRAUD_SIGNALS = False
 
+# Thread-local storage untuk menyimpan user yang sedang melakukan delete.
+# Digunakan oleh detect_hapus_lunas untuk mengecualikan superuser dari
+# FRAUD_BLOCK, sesuai deskripsi UI: "tidak bisa dihapus kecuali superuser".
+#
+# Penggunaan dari views.py sebelum delete:
+#   from apps.fraud_detection.signals import set_current_delete_user, clear_current_delete_user
+#   set_current_delete_user(request.user)
+#   instance.delete()
+#   clear_current_delete_user()
+import threading
+_thread_locals = threading.local()
+
+
+def set_current_delete_user(user):
+    """Set user yang sedang melakukan aksi delete (dipanggil dari views)."""
+    _thread_locals.current_delete_user = user
+
+
+def clear_current_delete_user():
+    """Bersihkan user setelah delete selesai."""
+    _thread_locals.current_delete_user = None
+
+
+def _get_current_delete_user():
+    """Ambil user yang sedang melakukan delete (internal)."""
+    return getattr(_thread_locals, 'current_delete_user', None)
+
+
 
 # ═══════════════════════════════════════════════════════════════
 #  HELPER FUNCTIONS — Fungsi pendukung yang dipakai oleh signals
@@ -170,10 +198,16 @@ def detect_hapus_lunas(sender, instance, **kwargs):
                     object_id=str(instance.pk)
                 )
 
-                # BLOKIR DELETE jika pengaturan aktif
-                # raise Exception akan membatalkan proses delete
+                # BLOKIR DELETE jika pengaturan aktif DAN user bukan superuser
+                # Superuser dikecualikan sesuai deskripsi UI:
+                # "tidak bisa dihapus oleh siapapun kecuali superuser"
                 if rule.block_delete_paid:
-                    raise Exception("FRAUD_BLOCK: Penghapusan transaksi lunas diblokir oleh sistem keamanan Fraud Rule.")
+                    current_user = _get_current_delete_user()
+                    if current_user and getattr(current_user, 'is_superuser', False):
+                        # Superuser diizinkan hapus — alert tetap tercatat
+                        pass
+                    else:
+                        raise Exception("FRAUD_BLOCK: Penghapusan transaksi lunas diblokir oleh sistem keamanan Fraud Rule.")
 
         except Exception as e:
             # Jika exception berasal dari FRAUD_BLOCK → lempar kembali
@@ -356,23 +390,37 @@ def blokir_stok_minus_pos(sender, instance, **kwargs):
     ──────────────────────────────────────────────
     Hanya aktif jika FraudRule.block_negative_stock = True.
     Hanya cek untuk record BARU (instance.pk belum ada).
+
+    Target model: POSTransactionItem (bukan POSItem — nama model aktual di pos/models.py)
+    Field mapping:
+        - instance.jumlah     = qty yang dibeli
+        - instance.transaction = FK ke POSTransaction (parent)
+        - instance.transaction.gudang = gudang terkait
     """
-    if sender.__name__ == 'POSItem':
+    if _BYPASS_FRAUD_SIGNALS:
+        return
+
+    if sender.__name__ == 'POSTransactionItem':
         try:
             rule = FraudRule.load()
             # Hanya berlaku jika flag block_negative_stock aktif
             if rule.block_negative_stock:
                 produk = getattr(instance, 'produk', None)
-                qty = getattr(instance, 'kuantitas', 0)
+                qty = getattr(instance, 'jumlah', 0)
 
-                if produk and qty > 0:
+                if produk and qty and qty > 0:
                     # Ambil gudang dari transaksi POS parent
-                    transaksi = getattr(instance, 'transaksi', None)
-                    gudang = getattr(transaksi, 'gudang', None)
+                    transaksi = getattr(instance, 'transaction', None)
+                    gudang = getattr(transaksi, 'gudang', None) if transaksi else None
 
-                    # Cek stok tersedia di gudang terkait
-                    if hasattr(produk, 'get_stok') and gudang:
-                        stok_tersedia = produk.get_stok(gudang=gudang)
+                    if gudang:
+                        # Cek stok tersedia di gudang terkait via Stok model
+                        from apps.produk.models import Stok
+                        try:
+                            stok_obj = Stok.objects.get(produk=produk, gudang=gudang)
+                            stok_tersedia = stok_obj.jumlah
+                        except Stok.DoesNotExist:
+                            stok_tersedia = 0
 
                         # Jika record BARU dan qty > stok → BLOKIR
                         if not instance.pk and qty > stok_tersedia:
@@ -384,7 +432,7 @@ def blokir_stok_minus_pos(sender, instance, **kwargs):
                                 deskripsi=f"POS Item diblokir: Kuantitas {qty} melebihi stok tersedia ({stok_tersedia}) untuk produk {produk.nama}",
                                 user_terkait=user,
                                 nominal=0,
-                                model_name='POSItem',
+                                model_name='POSTransactionItem',
                                 object_id=''
                             )
                             # Raise exception → cancel save

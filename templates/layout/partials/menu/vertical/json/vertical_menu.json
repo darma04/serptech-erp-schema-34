@@ -215,6 +215,11 @@
           "url": "laporan:keuangan",
           "name": "Laporan Keuangan",
           "slug": "laporan-keuangan"
+        },
+        {
+          "url": "laporan:cabang",
+          "name": "Laporan Cabang",
+          "slug": "laporan-cabang"
         }
       ]
     },

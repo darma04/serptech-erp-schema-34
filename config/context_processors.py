@@ -85,7 +85,7 @@ def environment(request):
     return {'ENVIRONMENT': settings.ENVIRONMENT}
 
 
-def export_templates(request):
+def export_templates(request):  # noqa
     """
     Menyediakan data template cetak Export Excel dan PDF ke semua halaman.
 
@@ -105,23 +105,31 @@ def export_templates(request):
     - Template HTML export → Menggunakan data ini untuk header/footer dokumen
     """
     from django.core.cache import cache
-    from apps.pengaturan.models import TemplateCetak
 
     cache_key = 'ctx_export_templates'
     cached = cache.get(cache_key)
     if cached:
         return cached
 
-    # Ambil atau buat template export PDF dan Excel
-    export_pdf = TemplateCetak.get_template('export_pdf')
-    export_excel = TemplateCetak.get_template('export_excel')
+    try:
+        from apps.pengaturan.models import TemplateCetak
 
-    result = {
-        'export_pdf_template': export_pdf,      # Template untuk export PDF
-        'export_excel_template': export_excel,   # Template untuk export Excel
-    }
-    cache.set(cache_key, result, 60)  # Cache 60 detik
-    return result
+        # Ambil atau buat template export PDF dan Excel
+        export_pdf = TemplateCetak.get_template('export_pdf')
+        export_excel = TemplateCetak.get_template('export_excel')
+
+        result = {
+            'export_pdf_template': export_pdf,      # Template untuk export PDF
+            'export_excel_template': export_excel,   # Template untuk export Excel
+        }
+        cache.set(cache_key, result, 60)  # Cache 60 detik
+        return result
+    except Exception:
+        # Tabel belum ada di schema ini (normal untuk multi-tenant public schema)
+        return {
+            'export_pdf_template': None,
+            'export_excel_template': None,
+        }
 
 
 def pengaturan_perusahaan(request):

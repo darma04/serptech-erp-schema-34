@@ -754,7 +754,7 @@
           </div>
           <div class="card-info">
             <h5 class="mb-0" data-bs-toggle="tooltip" data-bs-placement="top"
-              title="Total harga beli × (stok saat ini + qty terjual) dari semua produk yang pernah masuk ke sistem">{{ sales_overview.total_keseluruhan_aset|rupiah }}</h5>
+              title="Total harga beli × qty historis (stok + terjual SO + terjual POS konversi + adj_out) dari semua produk">{{ sales_overview.total_keseluruhan_aset|rupiah }}</h5>
             <p class="mb-0">Total Aset</p>
           </div>
         </div>
@@ -830,7 +830,7 @@
         </div>
         <div class="mb-2">
           <h4 class="mb-0 text-truncate" data-bs-toggle="tooltip" data-bs-placement="top"
-            title="Keuntungan kotor = (Harga Jual − Harga Beli) × Jumlah terjual, dari Sales Order + POS Transaction">{{ profit_data.gross_profit|rupiah }}</h4>
+            title="Keuntungan kotor = (Harga Jual − Harga Beli) × Jumlah terjual. SO: qty transaksi, POS: qty konversi (satuan dasar)">{{ profit_data.gross_profit|rupiah }}</h4>
         </div>
         <div>
           <small class="{% if profit_data.is_profit %}text-success{% else %}text-danger{% endif %} fw-medium"

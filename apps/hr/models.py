@@ -366,15 +366,21 @@ class Karyawan(models.Model):
                 last_number = int(last_karyawan.nik[-4:])
                 new_number = last_number + 1
             except (ValueError, IndexError):
-                # DIPERBAIKI: bare except → except spesifik
-                # Jika format NIK tidak standar (gagal parse), mulai dari 1
-                new_number = 1
+                # DIPERBAIKI: Jika format NIK tidak standar (gagal parse),
+                # hitung jumlah karyawan dengan prefix ini + 1 sebagai fallback aman
+                # Ini mencegah IntegrityError jika NIK sudah ada
+                new_number = Karyawan.objects.filter(nik__startswith=prefix).count() + 1
         else:
             # Belum ada karyawan di tahun ini → mulai dari 1
             new_number = 1
 
         # Format dengan zero-padding 4 digit: 1 → '0001', 42 → '0042'
-        return f"{prefix}{new_number:04d}"
+        # Tambahan: loop untuk memastikan NIK yang dihasilkan benar-benar unik
+        nik = f"{prefix}{new_number:04d}"
+        while Karyawan.objects.filter(nik=nik).exists():
+            new_number += 1
+            nik = f"{prefix}{new_number:04d}"
+        return nik
 
 
 # ╔══════════════════════════════════════════════════════════════╗

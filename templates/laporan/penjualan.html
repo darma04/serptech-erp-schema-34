@@ -52,7 +52,7 @@
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Total Keuntungan</p>
-                            <h4 class="mb-0 {% if total_keuntungan >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>╬ú (harga_jual ÔêÆ harga_beli) ├ù qty per item yang terjual.<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Keuntungan kotor dari semua barang terjual.">{{ total_keuntungan|rupiah }}</h4>
+                            <h4 class="mb-0 {% if total_keuntungan >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_jual − harga_beli) × qty per item terjual.<br>SO: qty transaksi, POS: qty konversi (satuan dasar).<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Keuntungan kotor dari semua barang terjual.">{{ total_keuntungan|rupiah }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-primary rounded p-2">
@@ -69,7 +69,7 @@
                     <div class="d-flex justify-content-between">
                         <div class="card-info">
                             <p class="card-text text-muted">Harga Beli</p>
-                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>╬ú (harga_beli ├ù qty) per item yang terjual.<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Total modal dari barang yang sudah terjual.">{{ total_harga_beli|rupiah }}</h4>
+                            <h4 class="mb-0 text-info summary-nominal" style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true" title="<b>Alur Data:</b><br>Σ (harga_beli × qty) per item terjual.<br>SO: qty transaksi, POS: qty konversi (satuan dasar).<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Total modal dari barang yang sudah terjual.">{{ total_harga_beli|rupiah }}</h4>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-info rounded p-2">
@@ -173,6 +173,7 @@
                             </div>
                         </div>
                     </div>
+                    <small class="text-muted d-block mt-1">Klik untuk memilih kolom</small>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Pilih Kolom POS</label>
@@ -230,6 +231,7 @@
                             </div>
                         </div>
                     </div>
+                    <small class="text-muted d-block mt-1">Klik untuk memilih kolom</small>
                 </div>
                 <div class="col-md-3"></div>
                 <div class="col-md-3">

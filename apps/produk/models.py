@@ -336,6 +336,16 @@ class Produk(models.Model):
     # ===== STATUS =====
     aktif = models.BooleanField(default=True, verbose_name="Aktif")
 
+    # ===== METODE PEMBAYARAN =====
+    # FK ke MetodePembayaran — metode pembayaran saat menambahkan produk
+    metode_pembayaran = models.ForeignKey(
+        'pos.MetodePembayaran',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='produk_set',
+        verbose_name="Metode Pembayaran"
+    )
+
     # ===== TRACKING =====
     dibuat_oleh = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='produk_dibuat')
     # dibuat_pada — Tanggal & waktu
@@ -417,16 +427,21 @@ class Produk(models.Model):
                 last_number = int(last_product.sku.split('-')[-1])
                 new_number = last_number + 1  # Increment: 5 → 6
             except (ValueError, IndexError):
-                # DIPERBAIKI: bare except → except spesifik
-                # Jika format SKU tidak standar (gagal parse), mulai dari 1
-                new_number = 1
+                # DIPERBAIKI: Jika format SKU tidak standar (gagal parse),
+                # hitung jumlah produk dengan prefix ini + 1 sebagai fallback aman
+                # Ini mencegah IntegrityError jika SKU-00001 sudah ada
+                new_number = Produk.objects.filter(sku__startswith=prefix).count() + 1
         else:
             # Belum ada produk dengan prefix ini → mulai dari 1
             new_number = 1
 
         # LANGKAH 4: Format SKU dengan zero-padding 5 digit
-        # :05d → 1 jadi '00001', 42 jadi '00042', 999 jadi '00999'
-        return f"{prefix}-{new_number:05d}"
+        # Tambahan: loop untuk memastikan SKU yang dihasilkan benar-benar unik
+        sku = f"{prefix}-{new_number:05d}"
+        while Produk.objects.filter(sku=sku).exists():
+            new_number += 1
+            sku = f"{prefix}-{new_number:05d}"
+        return sku
 
     @property
     def stok_total(self):

@@ -435,20 +435,58 @@ class SalesOrderDeleteView(DeletePermissionMixin, DeleteView):
         return self.delete(request, *args, **kwargs)
 
     def delete(self, request, *args, **kwargs):
-        """Hapus data - return JSON response untuk AJAX."""
-        from django.http import JsonResponse
-        self.object = self.get_object()
+        """
+        Hapus SO - rollback stok jika sudah confirmed/delivered/completed.
+        Return JSON response untuk AJAX.
 
-        # Blok penanganan error - coba jalankan kode di bawah
+        ALUR PENGHAPUSAN:
+        1. Jika SO sudah confirmed+ (stok sudah dikurangi saat confirm):
+           a. Untuk setiap item, kembalikan stok ke gudang
+           b. Update cabang produk ke gudang stok terbanyak
+        2. Hapus SO (items CASCADE otomatis)
+        """
+        from django.http import JsonResponse
+        from django.db import transaction as db_transaction
+        from apps.produk.models import Stok
+        from apps.fraud_detection.signals import set_current_delete_user, clear_current_delete_user
+        self.object = self.get_object()
+        so = self.object
+
         try:
-            self.object.delete()
-            # Kembalikan respons JSON sukses ke klien
-            return JsonResponse({'success': True, 'message': 'Sales Order berhasil dihapus'})
-        # Tangkap error Exception - lanjutkan tanpa crash
+            # Rollback stok jika SO sudah melewati tahap confirm (stok sudah dikurangi)
+            if so.status in ['confirmed', 'delivered', 'completed']:
+                with db_transaction.atomic():
+                    for item in so.items.select_related('produk'):
+                        # Gunakan jumlah_konversi (satuan dasar) untuk rollback
+                        qty_rollback = item.jumlah_konversi if item.jumlah_konversi else item.jumlah
+
+                        # Kembalikan stok ke gudang (kebalikan dari confirm_order)
+                        stok, _ = Stok.objects.select_for_update().get_or_create(
+                            produk=item.produk, gudang=so.gudang,
+                            defaults={'jumlah': 0}
+                        )
+                        stok.jumlah += qty_rollback
+                        stok.save()
+
+                        # Update cabang produk ke gudang dengan stok terbanyak
+                        produk = item.produk
+                        stok_terbanyak = Stok.objects.filter(
+                            produk=produk, jumlah__gt=0
+                        ).order_by('-jumlah').first()
+
+                        if stok_terbanyak and produk.cabang != stok_terbanyak.gudang:
+                            produk.cabang = stok_terbanyak.gudang
+                            produk.save(update_fields=['cabang'])
+
+            set_current_delete_user(request.user)
+            so.delete()
+            clear_current_delete_user()
+            return JsonResponse({'success': True, 'message': 'Sales Order berhasil dihapus dan stok telah di-rollback'})
         except ProtectedError:
+            clear_current_delete_user()
             return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
         except Exception as e:
-            # Kembalikan respons JSON gagal ke klien
+            clear_current_delete_user()
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
 
 
@@ -647,20 +685,25 @@ class TransactionDeleteView(DeletePermissionMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         """Hapus data - return JSON response untuk AJAX."""
         from django.http import JsonResponse
+        from apps.fraud_detection.signals import set_current_delete_user, clear_current_delete_user
         self.object = self.get_object()
 
         # Blok penanganan error - coba jalankan kode di bawah
         try:
             nomor_transaksi = self.object.nomor_transaksi
+            set_current_delete_user(request.user)
             self.object.delete()
+            clear_current_delete_user()
             return JsonResponse({
                 'success': True, 
                 'message': f'Transaksi {nomor_transaksi} berhasil dihapus'
             })
         # Tangkap error Exception - lanjutkan tanpa crash
         except ProtectedError:
+            clear_current_delete_user()
             return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
         except Exception as e:
+            clear_current_delete_user()
             return JsonResponse({
                 'success': False, 
                 'message': f'Gagal menghapus transaksi: {str(e)}'

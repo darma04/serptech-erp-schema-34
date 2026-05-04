@@ -58,9 +58,9 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                             <p class="card-text text-muted">Total Pengeluaran</p>
                             <h4 class="mb-0 text-danger summary-nominal" style="cursor:help" data-bs-toggle="tooltip"
                                 data-bs-placement="bottom" data-bs-html="true"
-                                title="<b>Alur Data:</b><br>Σ nominal Biaya (status approved) + Σ total_harga PO (approved/received).<br><br><b>Sumber:</b> Tabel Biaya + PurchaseOrder.<br>Mendukung filter tanggal.">
+                                title="<b>Alur Data:</b><br>Σ nominal Biaya (status approved) + Σ total_harga PO (approved/received) + Σ (harga_beli × qty_historis) Produk.<br><br><b>Sumber:</b> Tabel Biaya + PurchaseOrder + Produk.<br>Qty historis = stok saat ini + terjual (SO: qty transaksi, POS: qty konversi satuan dasar) + adj_out.<br>Mendukung filter tanggal.">
                                 {{ total_pengeluaran|rupiah }}</h4>
-                            <small class="text-muted">Pembelian + biaya</small>
+                            <small class="text-muted">PO + Biaya + Produk</small>
                         </div>
                         <div class="card-icon">
                             <span class="badge bg-label-danger rounded p-2">
@@ -129,7 +129,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                             <h4 class="mb-0 {% if keuntungan_kotor >= 0 %}text-success{% else %}text-danger{% endif %} summary-nominal"
                                 style="cursor:help" data-bs-toggle="tooltip" data-bs-placement="bottom"
                                 data-bs-html="true"
-                                title="<b>Alur Data:</b><br>Σ (harga_jual − harga_beli) × qty per item terjual (SO + POS).<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Mendukung filter tanggal dan cabang.">
+                                title="<b>Alur Data:</b><br>Σ (harga_jual − harga_beli) × qty per item terjual.<br>SO: qty transaksi, POS: qty konversi (satuan dasar).<br><br><b>Sumber:</b> SalesOrderItem + POSTransactionItem.<br>Mendukung filter tanggal dan cabang.">
                                 {{ keuntungan_kotor|rupiah }}</h4>
                             <small class="text-muted">Margin penjualan</small>
                         </div>
@@ -225,8 +225,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <select class="form-select" id="cabangFilter">
                         <option value="">Semua Cabang</option>
                         {% for gudang in gudang_list %}
-                        <option value="{{ gudang.pk }}" {% if filter_cabang==gudang.pk|stringformat:'d' %}selected{%
-                            endif %}>{{ gudang.nama }}</option>
+                        <option value="{{ gudang.pk }}" {% if filter_cabang == gudang.pk|stringformat:'d' %}selected{% endif %}>{{ gudang.nama }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -235,8 +234,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     <select class="form-select" id="metodeFilter">
                         <option value="">Semua Metode</option>
                         {% for metode in metode_pembayaran_list %}
-                        <option value="{{ metode.pk }}" {% if filter_metode==metode.pk|stringformat:'d' %}selected{%
-                            endif %}>{{ metode.nama }}</option>
+                        <option value="{{ metode.pk }}" {% if filter_metode == metode.pk|stringformat:'d' %}selected{% endif %}>{{ metode.nama }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -301,6 +299,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                             </div>
                         </div>
                     </div>
+                    <small class="text-muted d-block mt-1">Klik untuk memilih kolom</small>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Kolom Pengeluaran</label>
@@ -356,12 +355,13 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                             </div>
                         </div>
                     </div>
+                    <small class="text-muted d-block mt-1">Klik untuk memilih kolom</small>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label" style="visibility:hidden;">Aksi</label>
-                    <div class="d-flex gap-2">
+                <div class="col-md-3"></div>
+                <div class="col-md-3">
+                    <div class="d-grid gap-2">
                         <button class="btn btn-primary" onclick="applyFilter()">
-                            <i class="ri-filter-3-line me-1"></i>Terapkan
+                            <i class="ri-filter-3-line me-1"></i>Terapkan Filter
                         </button>
                         <button class="btn btn-label-secondary" onclick="resetFilter()">
                             <i class="ri-refresh-line me-1"></i>Reset
@@ -474,8 +474,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                                 <i class="ri-calculator-line me-2 text-primary" style="font-size: 1.5rem;"></i>
                                 <div class="text-start">
                                     <strong class="d-block" style="font-size: 1rem;">RINGKASAN PEMASUKAN</strong>
-                                    <small class="text-muted" style="font-size: 0.75rem;">SO: {{
-                                        total_sales_order|rupiah }} | POS: {{ total_pos|rupiah }}</small>
+                                    <small class="text-muted" style="font-size: 0.75rem;">SO: {{ total_sales_order|rupiah }} | POS: {{ total_pos|rupiah }}</small>
                                 </div>
                             </div>
                         </td>
@@ -500,7 +499,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
     <!-- Tabel Pengeluaran -->
     <div class="card">
         <div class="card-header d-flex justify-content-between">
-            <h5 class="mb-0"><i class="ri-arrow-up-line me-2 text-danger"></i>Pengeluaran (Pembelian & Biaya)</h5>
+            <h5 class="mb-0"><i class="ri-arrow-up-line me-2 text-danger"></i>Pengeluaran (PO + Biaya + Produk)</h5>
             <div class="d-flex gap-2">
                 <button class="btn btn-sm btn-label-success" onclick="exportToExcel()"><i
                         class="ri-file-excel-2-line me-1"></i>Export Excel</button>
@@ -568,7 +567,30 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                         </td>
                     </tr>
                     {% endfor %}
-                    {% if not purchase_order_list and not transaksi_biaya_list %}
+                    {% for produk in produk_pengeluaran_list %}
+                    <tr>
+                        <td>{{ produk.dibuat_pada|date:"d M Y" }}</td>
+                        <td><span class="badge bg-label-info">Produk</span></td>
+                        <td>{{ produk.sku }} - {{ produk.nama }} <small class="text-muted">(Harga beli: {{ produk.harga_beli|rupiah }} × {{ produk.stok_total|floatformat:0 }})</small></td>
+                        <td>{{ produk.cabang.nama|default:"-" }}</td>
+                        <td>{{ produk.metode_pembayaran.nama|default:"-" }}</td>
+                        <td class="text-danger fw-semibold">-{{ produk.total_pengeluaran_produk|rupiah }}</td>
+                        <td>
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-icon dropdown-toggle hide-arrow"
+                                    data-bs-toggle="dropdown">
+                                    <i class="ri-more-2-line"></i>
+                                </button>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{% url 'laporan:produk-detail' produk.pk %}">
+                                        <i class="ri-eye-line me-2"></i>Lihat Detail
+                                    </a>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not purchase_order_list and not transaksi_biaya_list and not produk_pengeluaran_list %}
                     <tr>
                         <td colspan="7" class="text-center py-3">
                             <p class="text-muted mb-0">Belum ada pengeluaran</p>
@@ -583,8 +605,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                                 <i class="ri-calculator-line me-2 text-primary" style="font-size: 1.5rem;"></i>
                                 <div class="text-start">
                                     <strong class="d-block" style="font-size: 1rem;">RINGKASAN PENGELUARAN</strong>
-                                    <small class="text-muted" style="font-size: 0.75rem;">PO: {{ total_pembelian|rupiah
-                                        }} | Biaya: {{ total_biaya|rupiah }}</small>
+                                    <small class="text-muted" style="font-size: 0.75rem;">PO: {{ total_pembelian|rupiah }} | Biaya: {{ total_biaya|rupiah }} | Produk: {{ total_produk_pengeluaran|rupiah }}</small>
                                 </div>
                             </div>
                         </td>

@@ -133,7 +133,7 @@ class FraudDashboardView(SubModulePermissionMixin, TemplateView):
             total_terjual_pos = POSTransactionItem.objects.filter(
                 produk=produk,
                 transaction__status='paid'
-            ).aggregate(total=Sum('jumlah'))['total'] or 0
+            ).aggregate(total=Sum('jumlah_konversi'))['total'] or 0
             # Stok yang keluar via adjustment manual
             total_adj_out = AdjustmentStok.objects.filter(
                 produk=produk, tipe='out'
@@ -163,7 +163,7 @@ class FraudDashboardView(SubModulePermissionMixin, TemplateView):
 
         # Total pengeluaran: Purchase Order (terkonfirmasi) + Biaya operasional (disetujui)
         total_pengeluaran_po = PurchaseOrder.objects.filter(
-            status__in=['confirmed', 'received', 'completed']
+            status__in=['approved', 'received']
         ).aggregate(total=Sum('total_harga'))['total'] or Decimal('0')
         total_pengeluaran_biaya = TransaksiBiaya.objects.filter(
             status='approved'

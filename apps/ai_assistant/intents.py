@@ -626,7 +626,7 @@ def _gather_keuntungan(today, month_start):
         transaction__status='paid'
     ).annotate(
         margin=ExpressionWrapper(
-            (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah'),
+            (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah_konversi'),
             output_field=DecimalField()
         )
     ).aggregate(t=Sum('margin'))['t'] or 0)
@@ -1213,7 +1213,7 @@ def _gather_swot(today, month_start):
         transaction__status='paid'
     ).annotate(
         margin=ExpressionWrapper(
-            (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah'),
+            (F('harga_satuan') - F('produk__harga_beli')) * F('jumlah_konversi'),
             output_field=DecimalField()
         )
     ).aggregate(t=Sum('margin'))

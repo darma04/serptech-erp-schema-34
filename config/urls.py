@@ -209,6 +209,9 @@ urlpatterns = [
     # Global Search API — endpoint pencarian global untuk semua modul
     path("api/search/", global_search_api, name='global_search'),
     
+    # Tenant Provisioning API — Internal endpoint untuk CLS
+    path("api/internal/", include("apps.tenants.api_urls")),
+
     # License Activation URLs
     path("", include("apps.core.license_urls")),
 
