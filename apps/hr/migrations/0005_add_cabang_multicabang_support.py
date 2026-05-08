@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('hr', '0004_absensi_jarak_masuk_keluar'),
-        ('produk', '0007_produk_metode_pembayaran'),
+        ('produk', '0006_produk_metode_pembayaran'),
     ]
 
     operations = [
