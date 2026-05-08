@@ -302,18 +302,47 @@ class AdjustmentStokView(ReadPermissionMixin, ListView):
     permission_sub_module = 'adjustment_stok'
 
     def get_queryset(self):
-        """Override queryset - optimasi query dengan select_related."""
-        return AdjustmentStok.objects.select_related(
+        """Override queryset — support filter by date, jenis, gudang."""
+        qs = AdjustmentStok.objects.select_related(
             'produk', 'produk__satuan', 'gudang', 'dibuat_oleh'
-        ).order_by('-dibuat_pada')
+        ).order_by('-tanggal')
+
+        # Filter tanggal
+        start = self.request.GET.get('start')
+        end = self.request.GET.get('end')
+        if start:
+            qs = qs.filter(tanggal__date__gte=start)
+        if end:
+            qs = qs.filter(tanggal__date__lte=end)
+
+        # Filter jenis (in/out)
+        jenis = self.request.GET.get('jenis')
+        if jenis in ('in', 'out'):
+            qs = qs.filter(tipe=jenis)
+
+        # Filter gudang
+        gudang_id = self.request.GET.get('gudang')
+        if gudang_id:
+            qs = qs.filter(gudang_id=gudang_id)
+
+        return qs
 
     def get_context_data(self, **kwargs):
         """Menambahkan data konteks tambahan ke template."""
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
         # Data konteks: total_adjustment - untuk ditampilkan di template
         context['total_adjustment'] = self.get_queryset().count()
-        # Data konteks: gudang_list - untuk filter dropdown di template
-        context['gudang_list'] = Gudang.objects.filter(aktif=True)
+        # Gudang list untuk filter dropdown
+        context['gudang_list'] = Gudang.objects.filter(aktif=True).order_by('nama')
+
+        # Export template context
+        try:
+            from apps.pengaturan.models import TemplateCetak
+            context['export_excel_template'] = TemplateCetak.objects.filter(tipe='excel').first()
+            context['export_pdf_template'] = TemplateCetak.objects.filter(tipe='pdf').first()
+        except Exception:
+            pass
+
         return context
 
 
@@ -415,9 +444,14 @@ class AdjustmentStokCreateView(CreatePermissionMixin, CreateView):
 
 class AdjustmentStokDeleteView(DeletePermissionMixin, DeleteView):
     """
-    Hapus adjustment stok - return JSON response untuk AJAX.
+    Hapus adjustment stok dengan rollback stok otomatis.
     URL: /inventory/adjustment/<pk>/delete/
-    Permission: DeletePermissionMixin → cek can_delete untuk modul inventory
+    Return: JSON response untuk AJAX
+
+    Saat dihapus:
+    - Tipe 'in' (penambahan): stok dikurangi kembali
+    - Tipe 'out' (pengurangan): stok dikembalikan
+    - Produk.cabang: diupdate ke gudang stok terbanyak
     """
     model = AdjustmentStok
     # URL redirect setelah operasi berhasil
@@ -427,18 +461,52 @@ class AdjustmentStokDeleteView(DeletePermissionMixin, DeleteView):
     permission_sub_module = 'adjustment_stok'
 
     def delete(self, request, *args, **kwargs):
-        """Hapus data - return JSON response untuk AJAX."""
+        """Hapus adjustment - rollback stok, return JSON response."""
         self.object = self.get_object()
 
-        # Blok penanganan error - coba jalankan kode di bawah
         try:
-            nomor_adjustment = self.object.nomor_adjustment
-            self.object.delete()
+            adjustment = self.object
+            nomor = adjustment.nomor_adjustment
+
+            with transaction.atomic():
+                # Rollback stok: kebalikan dari operasi adjustment awal
+                stok, _ = Stok.objects.select_for_update().get_or_create(
+                    produk=adjustment.produk, gudang=adjustment.gudang,
+                    defaults={'jumlah': 0}
+                )
+
+                if adjustment.tipe == 'in':
+                    # Adjustment tambah → rollback = kurangi stok
+                    stok.jumlah -= adjustment.jumlah
+                    if stok.jumlah < 0:
+                        stok.jumlah = 0
+                else:
+                    # Adjustment kurang → rollback = tambah stok
+                    stok.jumlah += adjustment.jumlah
+
+                stok.save()
+
+                # Update cabang produk ke gudang dengan stok terbanyak
+                produk = adjustment.produk
+                stok_terbanyak = Stok.objects.filter(
+                    produk=produk, jumlah__gt=0
+                ).order_by('-jumlah').first()
+
+                if stok_terbanyak:
+                    if produk.cabang != stok_terbanyak.gudang:
+                        produk.cabang = stok_terbanyak.gudang
+                        produk.save(update_fields=['cabang'])
+                else:
+                    # Tidak ada stok di gudang manapun → cabang NULL
+                    if produk.cabang is not None:
+                        produk.cabang = None
+                        produk.save(update_fields=['cabang'])
+
+            adjustment.delete()
             return JsonResponse({
                 'success': True,
-                'message': f'Adjustment Stok {nomor_adjustment} berhasil dihapus'
+                'message': f'Adjustment Stok {nomor} berhasil dihapus dan stok telah di-rollback'
             })
-        # Tangkap error ProtectedError - data terkait dengan data lain
         except ProtectedError:
             return JsonResponse({'success': False, 'message': 'Data tidak dapat dihapus karena sedang digunakan atau terkait dengan data lain.'}, status=400)
         except Exception as e:
