@@ -66,7 +66,7 @@ from apps.inventory.forms import TransferStokForm, AdjustmentStokForm, TransferS
 from web_project import TemplateLayout
 # Import dari modul internal proyek
 from apps.core.mixins import ReadPermissionMixin, CreatePermissionMixin, UpdatePermissionMixin, DeletePermissionMixin
-from apps.core.permissions import has_permission
+from apps.core.permissions import has_permission, permission_required
 from django.db import transaction
 
 
@@ -104,7 +104,7 @@ class GudangCreateView(CreatePermissionMixin, CreateView):
     Fields: kode, nama, alamat, aktif
     """
     model = Gudang
-    fields = ['kode', 'nama', 'alamat', 'metode_pembayaran_default', 'aktif']
+    fields = ['kode', 'nama', 'alamat', 'pajak_persen', 'metode_pembayaran_default', 'aktif']
     # Template HTML yang digunakan untuk render halaman
     template_name = 'inventory/gudang_form.html'
     # URL redirect setelah operasi berhasil
@@ -134,6 +134,15 @@ class GudangCreateView(CreatePermissionMixin, CreateView):
         form.fields['metode_pembayaran_default'].queryset = MetodePembayaran.objects.filter(aktif=True)
         form.fields['metode_pembayaran_default'].empty_label = 'Pilih Metode Pembayaran (Opsional)'
         form.fields['metode_pembayaran_default'].widget.attrs['class'] = 'form-select'
+        # Kustomisasi field pajak_persen
+        form.fields['pajak_persen'].widget.attrs.update({
+            'class': 'form-control',
+            'min': '0',
+            'max': '100',
+            'step': '0.01',
+            'placeholder': '0.00'
+        })
+        form.fields['pajak_persen'].help_text = 'Tarif PPN khusus cabang ini. Kosongkan atau 0 = menggunakan default perusahaan.'
         return form
 
 
@@ -151,7 +160,7 @@ class GudangUpdateView(UpdatePermissionMixin, UpdateView):
     URL: /inventory/gudang/<pk>/edit/
     """
     model = Gudang
-    fields = ['kode', 'nama', 'alamat', 'metode_pembayaran_default', 'aktif']
+    fields = ['kode', 'nama', 'alamat', 'pajak_persen', 'metode_pembayaran_default', 'aktif']
     # Template HTML yang digunakan untuk render halaman
     template_name = 'inventory/gudang_form.html'
     # URL redirect setelah operasi berhasil
@@ -181,6 +190,15 @@ class GudangUpdateView(UpdatePermissionMixin, UpdateView):
         form.fields['metode_pembayaran_default'].queryset = MetodePembayaran.objects.filter(aktif=True)
         form.fields['metode_pembayaran_default'].empty_label = 'Pilih Metode Pembayaran (Opsional)'
         form.fields['metode_pembayaran_default'].widget.attrs['class'] = 'form-select'
+        # Kustomisasi field pajak_persen
+        form.fields['pajak_persen'].widget.attrs.update({
+            'class': 'form-control',
+            'min': '0',
+            'max': '100',
+            'step': '0.01',
+            'placeholder': '0.00'
+        })
+        form.fields['pajak_persen'].help_text = 'Tarif PPN khusus cabang ini. Kosongkan atau 0 = menggunakan default perusahaan.'
         return form
 
 
@@ -392,17 +410,18 @@ class TransferStokCreateView(CreatePermissionMixin, CreateView):
         formset = context['formset']
 
         if formset.is_valid():
-            # Set user pembuat
-            form.instance.dibuat_oleh = self.request.user
-            self.object = form.save()
+            with transaction.atomic():
+                # Set user pembuat
+                form.instance.dibuat_oleh = self.request.user
+                self.object = form.save()
 
-            # Link formset items ke transfer yang baru dibuat
-            formset.instance = self.object
-            formset.save()
+                # Link formset items ke transfer yang baru dibuat
+                formset.instance = self.object
+                formset.save()
 
             # Tampilkan pesan sukses ke user
             messages.success(self.request, f'Transfer Stok {self.object.nomor_transfer} berhasil dibuat')
-            return super().form_valid(form)
+            return redirect(self.get_success_url())
         else:
             # Formset tidak valid → render ulang form dengan error
             return self.render_to_response(self.get_context_data(form=form))
@@ -665,6 +684,7 @@ class TransferStokUpdateView(UpdatePermissionMixin, UpdateView):
 
 # Wajib login - redirect ke login page jika belum login
 @login_required
+@permission_required('update', 'inventory')
 def transfer_stok_approve(request, pk):
     """
     Approve transfer stok dan proses update stok.
@@ -871,6 +891,7 @@ class AdjustmentStokDeleteView(DeletePermissionMixin, DeleteView):
 
 # Wajib login - redirect ke login page jika belum login
 @login_required
+@permission_required('read', 'inventory')
 def get_stok_tersedia(request):
     """
     API endpoint: dapatkan stok tersedia per produk per gudang.
@@ -919,6 +940,7 @@ def get_stok_tersedia(request):
 
 # Wajib login - redirect ke login page jika belum login
 @login_required
+@permission_required('read', 'inventory')
 def get_stok_produk_gudang(request):
     """
     API endpoint: stok saat ini (untuk form adjustment).
@@ -965,6 +987,7 @@ def get_stok_produk_gudang(request):
 
 # Wajib login - redirect ke login page jika belum login
 @login_required
+@permission_required('read', 'inventory')
 def search_produk(request):
     """
     API endpoint: pencarian produk via Select2 AJAX.

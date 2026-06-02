@@ -35,6 +35,7 @@
 from django.db import models               # Django ORM untuk definisi model
 # Import dari framework Django
 from django.contrib.auth.models import User  # Model User bawaan Django
+from apps.core.validators import validate_image_file
 import uuid                                 # Modul untuk generate ID unik
 
 
@@ -330,11 +331,21 @@ class Produk(models.Model):
         upload_to='produk/',     # Disimpan di MEDIA_ROOT/produk/
         blank=True,
         null=True,
-        verbose_name="Gambar Produk"
+        verbose_name="Gambar Produk",
+        validators=[validate_image_file]
     )
 
     # ===== STATUS =====
     aktif = models.BooleanField(default=True, verbose_name="Aktif")
+
+    # ===== PPN =====
+    # Flag apakah produk ini dikenakan PPN saat transaksi
+    # True = kena PPN (default), False = bebas PPN (makanan pokok, dll)
+    kena_ppn = models.BooleanField(
+        default=True,
+        verbose_name="Kena PPN",
+        help_text="Jika dicentang, produk ini akan dikenakan PPN saat transaksi"
+    )
 
     # ===== METODE PEMBAYARAN =====
     # FK ke MetodePembayaran — metode pembayaran saat menambahkan produk
@@ -358,6 +369,12 @@ class Produk(models.Model):
         verbose_name = "Produk"
         verbose_name_plural = "Produk"
         ordering = ['-dibuat_pada']  # Terbaru di atas
+        indexes = [
+            models.Index(fields=['aktif', 'dibuat_pada'], name='prd_aktif_created_idx'),
+            models.Index(fields=['kategori', 'aktif'], name='prd_kat_aktif_idx'),
+            models.Index(fields=['cabang', 'aktif'], name='prd_cabang_aktif_idx'),
+            models.Index(fields=['metode_pembayaran', 'aktif'], name='prd_pay_aktif_idx'),
+        ]
 
     def __str__(self):
         """Representasi: 'PRD-00001 - Produk ABC'"""
@@ -427,21 +444,16 @@ class Produk(models.Model):
                 last_number = int(last_product.sku.split('-')[-1])
                 new_number = last_number + 1  # Increment: 5 → 6
             except (ValueError, IndexError):
-                # DIPERBAIKI: Jika format SKU tidak standar (gagal parse),
-                # hitung jumlah produk dengan prefix ini + 1 sebagai fallback aman
-                # Ini mencegah IntegrityError jika SKU-00001 sudah ada
-                new_number = Produk.objects.filter(sku__startswith=prefix).count() + 1
+                # DIPERBAIKI: bare except → except spesifik
+                # Jika format SKU tidak standar (gagal parse), mulai dari 1
+                new_number = 1
         else:
             # Belum ada produk dengan prefix ini → mulai dari 1
             new_number = 1
 
         # LANGKAH 4: Format SKU dengan zero-padding 5 digit
-        # Tambahan: loop untuk memastikan SKU yang dihasilkan benar-benar unik
-        sku = f"{prefix}-{new_number:05d}"
-        while Produk.objects.filter(sku=sku).exists():
-            new_number += 1
-            sku = f"{prefix}-{new_number:05d}"
-        return sku
+        # :05d → 1 jadi '00001', 42 jadi '00042', 999 jadi '00999'
+        return f"{prefix}-{new_number:05d}"
 
     @property
     def stok_total(self):
@@ -529,6 +541,9 @@ class Gudang(models.Model):
         verbose_name = "Gudang"            # Nama singular
         verbose_name_plural = "Gudang"     # Nama plural
         ordering = ['nama']                # Urutan default A-Z
+        indexes = [
+            models.Index(fields=['aktif', 'nama'], name='gudang_aktif_nama_idx'),
+        ]
 
     def __str__(self):
         """
@@ -536,6 +551,28 @@ class Gudang(models.Model):
         Format: 'GD-001 - Gudang Utama'
         """
         return f"{self.kode} - {self.nama}"
+
+    def get_tarif_ppn(self):
+        """
+        Ambil tarif PPN efektif untuk cabang/gudang ini.
+
+        Hierarki:
+        1. Gudang.pajak_persen → jika > 0, gunakan nilai ini
+        2. PengaturanPerusahaan.pajak_default → fallback jika gudang belum diset
+
+        Return: Decimal — tarif PPN dalam persen (contoh: 11.00)
+        Dipakai oleh: SalesOrderCreate/UpdateView, POSIndexView,
+        PurchaseOrder views (untuk auto-hitung pajak di form).
+        """
+        if self.pajak_persen and self.pajak_persen > 0:
+            return self.pajak_persen
+        # Fallback ke pengaturan perusahaan
+        try:
+            from apps.pengaturan.models import PengaturanPerusahaan
+            setting = PengaturanPerusahaan.load()
+            return setting.pajak_default or 0
+        except Exception:
+            return 0
 
 
 class Stok(models.Model):
@@ -598,6 +635,9 @@ class Stok(models.Model):
         # produk yang sama di gudang yang sama
         unique_together = ['produk', 'gudang']
         ordering = ['produk', 'gudang']    # Urutan: produk → gudang
+        indexes = [
+            models.Index(fields=['gudang', 'produk'], name='stok_gudang_produk_idx'),
+        ]
 
     def __str__(self):
         """

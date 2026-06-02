@@ -377,7 +377,7 @@ def _kirim_dokumen_sync(jenis_transaksi, nomor_referensi, instance, pdf_generato
                 error_message=str(e),
             )
         except Exception:
-            pass  # Last resort — jangan sampai error logging menggagalkan thread
+            pass
 
 
 def format_angka(angka):
@@ -487,4 +487,4 @@ def _kirim_notifikasi_sync(jenis_transaksi, nomor_referensi, data_transaksi):
                 error_message=str(e),
             )
         except Exception:
-            pass  # Last resort — jangan sampai error logging menggagalkan thread
+            pass

@@ -60,6 +60,11 @@
                 <i class="ri-close-circle-line me-1"></i>Tolak
             </button>
             {% endif %}
+            {% if can_edit.biaya and transaksi.status == 'approved' %}
+            <button type="button" class="btn btn-danger" onclick="cancelTransaksi({{ transaksi.pk }})">
+                <i class="ri-close-circle-line me-1"></i>Batalkan
+            </button>
+            {% endif %}
         </div>
     </div>
 
@@ -107,6 +112,8 @@
                                         <span class="badge bg-label-success">Disetujui</span>
                                         {% elif transaksi.status == 'rejected' %}
                                         <span class="badge bg-label-danger">Ditolak</span>
+                                        {% elif transaksi.status == 'cancelled' %}
+                                        <span class="badge bg-label-dark">Dibatalkan</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -254,7 +261,7 @@
 {% block page_js %}
 <script>
 // ═══════════════════════════════════════════════════════════════
-// APPROVE / REJECT TRANSAKSI BIAYA — AJAX
+// APPROVE / REJECT / CANCEL TRANSAKSI BIAYA — AJAX
 // ═══════════════════════════════════════════════════════════════
 
 function confirmApprove() {
@@ -265,6 +272,43 @@ function confirmApprove() {
 function confirmReject() {
     var modal = new bootstrap.Modal(document.getElementById('rejectModal'));
     modal.show();
+}
+
+function cancelTransaksi(pk) {
+    Swal.fire({
+        title: 'Batalkan Transaksi?',
+        text: 'Jurnal pembalik akan dibuat otomatis. Aksi ini tidak dapat dibatalkan.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Ya, Batalkan',
+        cancelButtonText: 'Tidak'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (!csrfToken) {
+                Swal.fire('Error', 'CSRF token tidak ditemukan. Refresh halaman.', 'error');
+                return;
+            }
+            fetch(`/biaya/transaksi/${pk}/cancel/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken.value,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Dibatalkan!', data.message, 'success').then(() => location.reload());
+                } else {
+                    Swal.fire('Gagal', data.message, 'error');
+                }
+            })
+            .catch(err => Swal.fire('Error', 'Terjadi kesalahan jaringan', 'error'));
+        }
+    });
 }
 
 document.addEventListener('DOMContentLoaded', function () {

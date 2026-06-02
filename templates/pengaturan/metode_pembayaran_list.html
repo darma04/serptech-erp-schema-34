@@ -35,9 +35,18 @@
             <p class="text-muted mb-0">Kelola metode pembayaran yang digunakan di POS</p>
         </div>
         {% if can_create.pengaturan %}
-        <a href="{% url 'pengaturan:metode_pembayaran_create' %}" class="btn btn-primary">
-            <i class="ri-add-line me-1"></i>Tambah Metode
-        </a>
+        <div class="d-flex gap-2">
+            <form method="post" action="{% url 'pengaturan:metode_pembayaran_seed' %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-label-success"
+                    onclick="return confirm('Seed metode pembayaran default? Data yang sudah ada tidak ditimpa.');">
+                    <i class="ri-database-2-line me-1"></i>Seed Pembayaran Default
+                </button>
+            </form>
+            <a href="{% url 'pengaturan:metode_pembayaran_create' %}" class="btn btn-primary">
+                <i class="ri-add-line me-1"></i>Tambah Metode
+            </a>
+        </div>
         {% endif %}
     </div>
 
@@ -46,7 +55,7 @@
         <div class="card-body">
             <div class="row g-3 align-items-end">
                 <!-- Filter Status -->
-                <div class="col-md-3 col-sm-6">
+                <div class="col-12 col-md">
                     <label class="form-label" for="filterStatus">Status</label>
                     <select class="form-select" id="filterStatus" onchange="filterByStatus()">
                         <option value="">Semua Status</option>
@@ -55,7 +64,7 @@
                     </select>
                 </div>
                 <!-- Filter Nama Pemilik -->
-                <div class="col-md-3 col-sm-6">
+                <div class="col-12 col-md">
                     <label class="form-label" for="filterPemilik">Nama Pemilik</label>
                     <input type="text" class="form-control" id="filterPemilik" placeholder="Cari nama pemilik..." oninput="filterByPemilik()">
                 </div>

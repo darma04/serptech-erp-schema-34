@@ -106,6 +106,11 @@ class TransferStok(models.Model):
         verbose_name = "Transfer Stok"         # Nama singular
         verbose_name_plural = "Transfer Stok"  # Nama plural
         ordering = ['-dibuat_pada']            # Terbaru di atas
+        indexes = [
+            models.Index(fields=['status', 'dibuat_pada'], name='inv_trf_status_created_idx'),
+            models.Index(fields=['gudang_asal', 'status'], name='inv_trf_asal_status_idx'),
+            models.Index(fields=['gudang_tujuan', 'status'], name='inv_trf_tujuan_status_idx'),
+        ]
 
     def __str__(self):
         """Representasi: 'TRF/2024/01/0001 - Gudang A → Gudang B'"""
@@ -305,6 +310,9 @@ class TransferStokItem(models.Model):
         """Konfigurasi metadata model TransferStokItem."""
         verbose_name = "Item Transfer"
         verbose_name_plural = "Item Transfer"
+        indexes = [
+            models.Index(fields=['produk', 'transfer'], name='inv_item_prod_trf_idx'),
+        ]
 
     def __str__(self):
         """Representasi: 'Produk A - 50'"""
@@ -368,6 +376,11 @@ class AdjustmentStok(models.Model):
         verbose_name = "Adjustment Stok"           # Nama singular
         verbose_name_plural = "Adjustment Stok"    # Nama plural
         ordering = ['-dibuat_pada']                # Terbaru di atas
+        indexes = [
+            models.Index(fields=['tanggal', 'tipe'], name='inv_adj_tgl_tipe_idx'),
+            models.Index(fields=['produk', 'gudang'], name='inv_adj_prod_gdg_idx'),
+            models.Index(fields=['gudang', 'tanggal'], name='inv_adj_gdg_tgl_idx'),
+        ]
 
     def __str__(self):
         """Representasi: 'ADJ/2024/01/0001 - Produk ABC'"""

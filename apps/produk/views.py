@@ -32,7 +32,7 @@ Koneksi:
 """
 
 # Import dari framework Django
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.db.models import ProtectedError                                    # Fungsi render template
 # Import dari framework Django
 from django.contrib.auth.decorators import login_required              # Decorator login wajib
@@ -57,6 +57,7 @@ from apps.core.mixins import (                                         # Permiss
     UpdatePermissionMixin, DeletePermissionMixin,
     SubModulePermissionMixin
 )
+from apps.core.permissions import permission_required
 import logging  # Modul logging standar Python - pengganti print() untuk production
 from django.db import transaction
 
@@ -264,6 +265,33 @@ class SatuanCreateView(SubModulePermissionMixin, CreateView):
         """Dipanggil saat form valid - proses penyimpanan data."""
         messages.success(self.request, 'Satuan berhasil ditambahkan')
         return super().form_valid(form)
+
+
+class SatuanSeedDefaultView(SubModulePermissionMixin, TemplateView):
+    """Seed satuan dan konversi default. URL: /produk/satuan/seed-default/"""
+    template_name = 'produk/satuan_list.html'
+    permission_module = 'produk'
+    permission_sub_module = 'satuan'
+    permission_action = 'create'
+
+    def get(self, request, *args, **kwargs):
+        return redirect('produk:satuan')
+
+    def post(self, request, *args, **kwargs):
+        try:
+            from io import StringIO
+            from django.core.management import call_command
+
+            output = StringIO()
+            call_command('seed_konversi_satuan', stdout=output)
+            messages.success(
+                request,
+                'Seed satuan default berhasil dijalankan. Satuan dan konversi default sudah dilengkapi.'
+            )
+        except Exception as exc:
+            logger.exception('Gagal menjalankan seed satuan default')
+            messages.error(request, f'Gagal menjalankan seed satuan default: {exc}')
+        return redirect('produk:satuan')
 
 
 class SatuanUpdateView(SubModulePermissionMixin, UpdateView):
@@ -894,6 +922,10 @@ class ProdukImportView(SubModulePermissionMixin, TemplateView):
                             kode='GD-DEFAULT', nama='Gudang Utama', aktif=True
                         )
 
+                    # Tentukan status kena_ppn dari file import
+                    kena_ppn_raw = str(row.get('kena_ppn', '')).strip().lower()
+                    kena_ppn = kena_ppn_raw not in ('0', 'false', 'tidak', 'no')
+
                     # Buat produk baru
                     produk = Produk.objects.create(
                         sku=sku or '',
@@ -905,6 +937,7 @@ class ProdukImportView(SubModulePermissionMixin, TemplateView):
                         harga_jual=float(row.get('harga_jual', 0) or 0),
                         barcode=str(row.get('barcode', '')).strip() if row.get('barcode') else '',
                         aktif=True,
+                        kena_ppn=kena_ppn,
                         cabang=gudang_target,
                         dibuat_oleh=request.user,
                         metode_pembayaran=metode_pembayaran
@@ -990,6 +1023,7 @@ class ProdukImportView(SubModulePermissionMixin, TemplateView):
 
 # Wajib login - redirect ke login page jika belum login
 @login_required
+@permission_required('read', 'produk')
 def api_konversi_satuan(request, produk_id):
     """
     API: Ambil daftar satuan yang tersedia untuk produk tertentu.
@@ -1032,6 +1066,7 @@ def api_konversi_satuan(request, produk_id):
 
 
 @login_required
+@permission_required('update', 'produk')
 def update_barcode(request, pk):
     """
     API: Update field barcode produk via AJAX POST.

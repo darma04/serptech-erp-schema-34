@@ -192,23 +192,15 @@ def _polling_loop():
     try:
         from .models import PengaturanTelegram
         pengaturan = PengaturanTelegram.load()
-    except Exception:
-        # Tabel belum ada di schema public (normal untuk multi-tenant mode)
-        # Detail error hanya dicatat di log level DEBUG, tidak ditampilkan di terminal
-        logger.debug("[TelegramBot] Tabel automation belum tersedia di schema aktif")
-        print("[TelegramBot] Polling dilewati (tabel belum tersedia di schema ini)")
-        _polling_active = False
-        return
 
-    if not pengaturan.bot_token:
-        logger.warning("[TelegramBot] Bot Token belum dikonfigurasi, polling tidak dimulai")
-        print("[TelegramBot] Bot Token belum dikonfigurasi")
-        _polling_active = False
-        return
+        if not pengaturan.bot_token:
+            logger.warning("[TelegramBot] Bot Token belum dikonfigurasi, polling tidak dimulai")
+            print("[TelegramBot] Bot Token belum dikonfigurasi")
+            _polling_active = False
+            return
 
-    bot_token = pengaturan.bot_token.strip()
+        bot_token = pengaturan.bot_token.strip()
 
-    try:
         # SSL context
         ssl_ctx = ssl.create_default_context()
         ssl_ctx.check_hostname = False
@@ -267,7 +259,7 @@ def _polling_loop():
                     wait = min(conflict_count * 10, 35)
                     # Hanya log SEKALI, jangan spam terminal
                     if not conflict_logged:
-                        print(f"[TelegramBot] Ada sesi polling lain yang aktif, menunggu...")
+                        print("[TelegramBot] Ada sesi polling lain yang aktif, menunggu...")
                         conflict_logged = True
                     time.sleep(wait)
                     continue
@@ -414,9 +406,9 @@ def _send_reply(chat_id, text):
                 text
             )
             if success:
-                logger.info(f"[TelegramBot] ✅ Balasan terkirim ke [{chat_id}]")
+                logger.info(f"[TelegramBot] Balasan terkirim ke [{chat_id}]")
             else:
-                logger.error(f"[TelegramBot] ❌ Gagal kirim ke [{chat_id}]")
+                logger.error(f"[TelegramBot] Gagal kirim ke [{chat_id}]")
     except Exception as e:
         logger.error(f"[TelegramBot] Error kirim reply: {e}")
 
