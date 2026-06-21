@@ -24,7 +24,7 @@ Filter, export Excel/PDF, DataTable standar, konsisten dengan CoA & produk.
 
 {% block content %}
 <div class="container-xxl flex-grow-1 container-p-y">
-    
+    <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="ri-calendar-check-line me-2"></i>Periode Akuntansi</h4>
@@ -37,6 +37,7 @@ Filter, export Excel/PDF, DataTable standar, konsisten dengan CoA & produk.
         {% endif %}
     </div>
 
+    <!-- Summary Cards — standar d-flex align-items-center (sama dengan CoA) -->
     <div class="row g-3 mb-4">
         <div class="col-sm-6 col-lg-4">
             <div class="card">
@@ -91,9 +92,10 @@ Filter, export Excel/PDF, DataTable standar, konsisten dengan CoA & produk.
         </div>
     </div>
 
+    <!-- Filter Card — konsisten: Row1: filter fields | Row2: col-3+col-6+col-3 -->
     <div class="card mb-4">
         <div class="card-body">
-            
+            <!-- Baris 1: Field filter -->
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">Cari Periode</label>
@@ -113,7 +115,7 @@ Filter, export Excel/PDF, DataTable standar, konsisten dengan CoA & produk.
                     </select>
                 </div>
             </div>
-            
+            <!-- Baris 2: Pilih Kolom (kiri) + spacer + Tombol Filter (kanan) — standar 3+6+3 -->
             <div class="row g-3 mt-2 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label">Pilih Kolom</label>
@@ -178,6 +180,7 @@ Filter, export Excel/PDF, DataTable standar, konsisten dengan CoA & produk.
         </div>
     </div>
 
+    <!-- Main Table Card -->
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="ri-calendar-check-line me-2"></i>Daftar Periode</h5>
@@ -246,7 +249,7 @@ Filter, export Excel/PDF, DataTable standar, konsisten dengan CoA & produk.
                         </td>
                     </tr>
                     {% endfor %}
-                    
+                    {# TIDAK ada baris {% empty %} dengan colspan — DataTables handle via language.sEmptyTable #}
                 </tbody>
                 <tfoot class="table-footer-summary">
                     <tr>
@@ -286,8 +289,9 @@ Filter, export Excel/PDF, DataTable standar, konsisten dengan CoA & produk.
     @media (max-width: 768px) { #periodeTable { min-width: 700px !important; } }
 </style>
 <script>
-
+// Filter via DataTable API — search global + column search status
 function filterPeriodeTable() {
+    if (!$.fn.dataTable.isDataTable('#periodeTable')) return;
     const dt = new $.fn.dataTable.Api('#periodeTable');
     const search = document.getElementById('searchPeriode').value;
     const status = document.getElementById('statusFilter').value;
@@ -299,19 +303,22 @@ function filterPeriodeTable() {
 function resetPeriodeFilter() {
     document.getElementById('searchPeriode').value = '';
     document.getElementById('statusFilter').value = '';
+    if (!$.fn.dataTable.isDataTable('#periodeTable')) return;
     const dt = new $.fn.dataTable.Api('#periodeTable');
     dt.search('').columns().search('').draw();
 }
 
+// Toggle Kolom — pakai columnMap eksplisit (sama persis dengan produk_list.html)
 function toggleColumns() {
+    if (!$.fn.dataTable.isDataTable('#periodeTable')) return;
     const dt = new $.fn.dataTable.Api('#periodeTable');
     const columnMap = {
-        '0': 0, 
-        '1': 1, 
-        '2': 2, 
-        '3': 3, 
-        '4': 4, 
-        '5': 5  
+        '0': 0, // #
+        '1': 1, // Nama Periode
+        '2': 2, // Tanggal Mulai
+        '3': 3, // Tanggal Akhir
+        '4': 4, // Status
+        '5': 5  // Aksi
     };
     document.querySelectorAll('.column-checkbox').forEach(cb => {
         const colIdx = columnMap[cb.value];
@@ -328,7 +335,7 @@ function deselectAllColumns() {
     document.querySelectorAll('.column-checkbox').forEach(cb => { cb.checked = false; });
     toggleColumns();
 }
-
+// Tutup Periode via AJAX
 function tutupPeriode(id, name) {
     if (!confirm('Tutup periode "' + name + '"?\n\nSetelah ditutup, jurnal pada periode ini tidak dapat diubah lagi.')) return;
     $.ajax({

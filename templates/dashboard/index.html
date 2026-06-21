@@ -1,40 +1,59 @@
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# DASHBOARD UTAMA — Halaman utama setelah login #}
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# File ini menampilkan ringkasan data bisnis: #}
+{# - Ringkasan Penjualan (total aset, harga beli, harga jual) #}
+{# - Estimasi Keuntungan & Profit Margin #}
+{# - Grafik Penjualan Bulan Ini (area chart) #}
+{# - Grafik Keuntungan per Cabang (bar chart) #}
+{# - Grafik Biaya per Kategori (bar chart) #}
+{# - Slider Penjualan Mingguan (Swiper carousel) #}
+{# - Slider Metode Pembayaran (Swiper carousel) #}
+{# - Tabel Produk Terlaris #}
+{# - Tabel Pengguna Terbaru #}
+{# - Timeline Aktivitas Terkini #}
+{# - Filter Tanggal, Jam Realtime, Lokasi, IP Address #}
+{# #}
+{# Terhubung dengan: #}
+{# - apps/dashboard/views.py → DashboardView menyiapkan semua data #}
+{# - config/context_processors.py → Data user dan pengaturan global #}
+{# - apps/produk/models.py → Data produk dan stok #}
+{# - apps/penjualan/models.py → Data penjualan #}
+{# - apps/pembelian/models.py → Data pembelian #}
+{# - apps/biaya/models.py → Data biaya operasional #}
+{# ══════════════════════════════════════════════════════════════════════ #}
 
+{# Extend layout utama — mewarisi struktur HTML (header, sidebar, footer) #}
 {% extends layout_path %}
 
-{% load static %} 
-{% load currency_filters %} 
-{% load i18n %} 
+{# Load template tags yang dibutuhkan #}
+{% load static %} {# Tag {% static %} untuk URL file statis (CSS, JS, gambar) #}
+{% load currency_filters %} {# Filter kustom |rupiah untuk format mata uang Indonesia #}
+{% load i18n %} {# Tag internasionalisasi (multi-bahasa) #}
 
-{% comment %}
-   ==========================================================================
-   DASHBOARD - Halaman Utama Setelah Login
-   Menampilkan ringkasan statistik, grafik penjualan,
-   dan widget performa bisnis. Data diambil dari berbagai
-   modul: penjualan, pembelian, stok, dan keuangan.
-   ==========================================================================
-{% endcomment %}
-
-
+{# Judul halaman — muncul di tab browser #}
 {% block title %}Dashboard - eCommerce{% endblock title %}
 
+{# ═══ VENDOR CSS — Library CSS eksternal yang dibutuhkan dashboard ═══ #}
 {% block vendor_css %}
-{{ block.super }} 
-
+{{ block.super }} {# Memuat CSS dari parent template terlebih dahulu #}
+{# DataTables CSS — untuk tabel interaktif (sorting, searching, pagination) #}
 <link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
-
+{# ApexCharts CSS — untuk grafik/chart (penjualan, keuntungan, biaya) #}
 <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
-
+{# Swiper CSS — untuk slider/carousel (penjualan mingguan, metode pembayaran) #}
 <link rel="stylesheet" href="{% static 'vendor/libs/swiper/swiper.css' %}" />
 {% endblock vendor_css %}
 
+{# ═══ VENDOR JS — Library JavaScript eksternal ═══ #}
 {% block vendor_js %}
-{{ block.super }} 
-
+{{ block.super }} {# Memuat JS dari parent template terlebih dahulu #}
+{# DataTables JS — engine tabel interaktif #}
 <script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
-
+{# ApexCharts JS — library untuk membuat grafik/chart interaktif #}
 <script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
-
+{# Swiper JS — library untuk slider/carousel yang responsif #}
 <script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
 {% endblock vendor_js %}
 
@@ -42,9 +61,9 @@
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'vendor/css/pages/cards-statistics.css' %}" />
 <link rel="stylesheet" href="{% static 'vendor/css/pages/cards-analytics.css' %}" />
-
+{# CSS Kustom Dashboard — Styling badge dan layout yang tidak ada di Bootstrap #}
 <style>
-  
+  /* Badge angka pada slider penjualan mingguan (latar semi-transparan putih) */
   .weekly-sales-text-bg-primary {
     background-color: rgba(255, 255, 255, 0.2);
     color: #fff !important;
@@ -52,6 +71,7 @@
     border-radius: 0.375rem;
   }
 
+  /* Badge angka penjualan (latar ungu semi-transparan) */
   .sales-text-bg {
     background-color: rgba(102, 108, 255, 0.16);
     color: #666cff !important;
@@ -65,6 +85,8 @@
     white-space: nowrap;
   }
 
+  /* Badge statistik metode pembayaran pada slider */
+  /* Warna abu-abu dengan teks gelap — support dark & light mode */
   .payment-stat-badge {
     background-color: rgba(0, 0, 0, 0.06);
     color: #5a5c61;
@@ -89,6 +111,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
+  /* Dark mode: badge metode pembayaran abu-abu gelap */
   [data-theme="dark"] .payment-stat-badge,
   .dark-style .payment-stat-badge {
     background-color: rgba(255, 255, 255, 0.08);
@@ -106,8 +129,13 @@
     min-height: 120px;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+     MOBILE ≤ 576px — Hanya styling SPESIFIK dashboard
+     (Aturan umum sudah di global styles.html)
+     ═══════════════════════════════════════════════════════════════════ */
   @media (max-width: 576px) {
 
+    /* ─── Card subtitle & info dashboard ─── */
     .card .card-subtitle {
       font-size: 0.75rem;
     }
@@ -116,6 +144,7 @@
       font-size: 0.8rem;
     }
 
+    /* ─── Ringkasan Penjualan: gap rapat ─── */
     .card-body.d-flex.justify-content-between.flex-wrap {
       gap: 0.75rem !important;
     }
@@ -124,6 +153,7 @@
       gap: 0.5rem !important;
     }
 
+    /* ─── Badge slider (khusus dashboard) ─── */
     .payment-stat-badge {
       min-width: 70px;
       padding: 0.3rem 0.5rem;
@@ -136,6 +166,7 @@
       font-size: 0.75rem;
     }
 
+    /* ─── Weekly Sales Swiper ─── */
     .swiper-container .swiper-slide {
       padding: 0.875rem !important;
     }
@@ -153,6 +184,7 @@
       padding: 0.875rem !important;
     }
 
+    /* ─── Timeline ─── */
     .timeline .timeline-item {
       padding-bottom: 0.75rem;
     }
@@ -166,24 +198,29 @@
       margin-bottom: 0.375rem !important;
     }
 
+    /* ─── Chart min-height ─── */
     #liveVisitors,
     #visitsByDayChart {
       min-height: 180px;
     }
 
+    /* ─── Divider Gudang & Produk ─── */
     .divider.divider-vertical {
       margin: 0 !important;
     }
 
+    /* ─── Filter bar margin ─── */
     .dash-filter-card {
       margin-bottom: 0.75rem !important;
     }
 
+    /* ─── Icon posisi absolute (Estimasi/Profit) ─── */
     .card .position-absolute[style*="top: 1.5rem; right: 1.5rem"] {
       top: 0.875rem !important;
       right: 0.875rem !important;
     }
 
+    /* ─── Marketing slider compact ─── */
     .swiper-sales .d-flex.align-items-center.mt-4 {
       margin-top: 0.75rem !important;
     }
@@ -201,6 +238,7 @@
       margin-top: 0.75rem !important;
     }
 
+    /* ─── Total Pembelian/Biaya ─── */
     .card .d-flex.align-items-center.gap-4 {
       gap: 0.75rem !important;
     }
@@ -209,35 +247,40 @@
 {% endblock page_css %}
 
 {% block page_js %}
+{# ═══ DATA JSON DARI SERVER (Django → JavaScript) ═══ #}
+{# Tag json_script Django mengkonversi data Python ke JSON yang aman untuk HTML #}
+{# Data ini akan dibaca oleh JavaScript untuk membuat grafik chart #}
+{{ sales_chart_data|json_script:"sales-chart-data" }} {# Data angka penjualan per tanggal #}
+{{ sales_chart_labels|json_script:"sales-chart-labels" }} {# Label tanggal untuk sumbu X chart #}
 
-{% if sales_this_month %}
-{{ sales_chart_data|json_script:"sales-chart-data" }} 
-{{ sales_chart_labels|json_script:"sales-chart-labels" }} 
-{% endif %}
-
-{% if sales_cabang_series %}
 {{ sales_cabang_labels|json_script:"sales-cabang-labels" }}
 {{ sales_cabang_series|json_script:"sales-cabang-series" }}
-{% endif %}
 
 {{ block.super }}
 <script src="{% static 'vendor/libs/swiper/swiper.js' %}"></script>
 <script>
-  'use strict';  
+  'use strict';  // Mode ketat JavaScript — mencegah penggunaan variabel tanpa deklarasi
 
+  // ═══════════════════════════════════════════════════════════════
+  // INISIALISASI SETELAH DOM SIAP
+  // ═══════════════════════════════════════════════════════════════
+  // Semua kode chart dan Swiper berjalan setelah HTML selesai dimuat
   document.addEventListener('DOMContentLoaded', function () {
 
+    // ─── DETEKSI MODE TERANG/GELAP ───
+    // Memilih palet warna yang sesuai berdasarkan tema
+    // isDarkStyle = variabel global dari template helper
     let cardColor, headingColor, labelColor, borderColor, legendColor;
 
     if (isDarkStyle) {
-      
+      // Warna untuk mode gelap (dark mode)
       cardColor = config.colors_dark.cardColor;
       headingColor = config.colors_dark.headingColor;
       labelColor = config.colors_dark.textMuted;
       legendColor = config.colors_dark.bodyColor;
       borderColor = config.colors_dark.borderColor;
     } else {
-      
+      // Warna untuk mode terang (light mode)
       cardColor = config.colors.cardColor;
       headingColor = config.colors.headingColor;
       labelColor = config.colors.textMuted;
@@ -245,17 +288,27 @@
       borderColor = config.colors.borderColor;
     }
 
+    // ─── SWIPER: SLIDER PENJUALAN MINGGUAN ───
+    // Carousel otomatis yang menampilkan data penjualan mingguan per kategori produk
+    // Bergeser otomatis setiap 2.5 detik, bisa diklik paginationnya
     const swiperWithBgPagination = document.querySelector('#swiper-weekly-sales-with-bg');
     if (swiperWithBgPagination) {
       new Swiper(swiperWithBgPagination, {
-        loop: true,         
-        autoplay: { delay: 2500, disableOnInteraction: false },  
-        pagination: { clickable: true, el: '.swiper-pagination' }  
+        loop: true,         // Loop terus (setelah slide terakhir → kembali ke pertama)
+        autoplay: { delay: 2500, disableOnInteraction: false },  // Otomatis geser
+        pagination: { clickable: true, el: '.swiper-pagination' }  // Dot pagination bisa diklik
       });
     }
 
-    {% if sales_this_month %}
-    
+
+
+    // ═══════════════════════════════════════════════════════════════
+    // GRAFIK AREA: PENJUALAN BULAN INI
+    // ═══════════════════════════════════════════════════════════════
+    // Grafik area (area chart) yang menampilkan tren penjualan harian
+    // selama bulan berjalan. Data diambil dari tag JSON Django.
+    // Library: ApexCharts
+    // ─────────────────────────────────────────────────────────────────
     const saleThisMonthChartEl = document.querySelector('#saleThisMonthChart');
 
     function readDashboardJson(id, fallback) {
@@ -276,11 +329,11 @@
 
     const saleThisMonthChartConfig = {
         chart: {
-          height: 120,         
-          type: 'area',        
+          height: 120,         // Tinggi chart 120px (compact)
+          type: 'area',        // Tipe: area chart (garis + fill di bawah)
           parentHeightOffset: 0,
-          toolbar: { show: false },   
-          sparkline: { enabled: true } 
+          toolbar: { show: false },   // Sembunyikan toolbar chart
+          sparkline: { enabled: true } // Mode sparkline (chart minimal tanpa axis)
         },
         grid: {
           xaxis: { lines: { show: false } },
@@ -311,16 +364,28 @@
       const saleThisMonthChart = new ApexCharts(saleThisMonthChartEl, saleThisMonthChartConfig);
       saleThisMonthChart.render();
     }
-    {% endif %}
+
+    // (Bagian chart Pembelian/Biaya, Keuntungan per Cabang, dan Biaya per Kategori telah dihapus)
+    // ═══════════════════════════════════════════════════════════════
+
 
   });
 
+  // ═══════════════════════════════════════════════════════════════
+  // FUNGSI MANAJEMEN USER DI DASHBOARD
+  // ═══════════════════════════════════════════════════════════════
+
+  // ─── TOGGLE STATUS USER (Aktif/Nonaktif) ───
+  // Mengubah status aktif/nonaktif user dari tabel di dashboard
+  // Saat ini masih placeholder, belum terintegrasi dengan backend
   function toggleUserStatus(userId) {
     if (confirm('Apakah Anda yakin ingin mengubah status user ini?')) {
       alert('Fitur toggle status akan diimplementasikan');
     }
   }
 
+  // ─── HAPUS USER — Dengan Konfirmasi Modal ───
+  // Variabel untuk menyimpan ID user yang akan dihapus
   let userToDelete = null;
 
   function confirmDeleteUser(userId, username) {
@@ -363,8 +428,14 @@
     });
   }
 
+  // ─── SHOW TOAST — Notifikasi Pop-up via Bootstrap Toast ───
+  // Membuat dan menampilkan notifikasi toast Bootstrap secara dinamis.
+  // Toast = notifikasi kecil yang muncul di pojok halaman.
+  // Parameter:
+  //   type (string) — 'success' atau 'danger'
+  //   message (string) — Pesan yang ditampilkan
   function showToast(type, message) {
-    
+    // Buat HTML toast secara dinamis
     const toastHtml = `
       <div class="bs-toast toast toast-placement-ex m-2 bg-${type} top-0 end-0" role="alert" aria-live="assertive" aria-atomic="true">
         <div class="toast-header">
@@ -376,83 +447,106 @@
       </div>
     `;
 
+    // Sisipkan toast ke dalam DOM dan tampilkan
     const toastContainer = document.createElement('div');
     toastContainer.innerHTML = toastHtml;
     document.body.appendChild(toastContainer);
 
     const toastElement = toastContainer.querySelector('.toast');
-    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });  
+    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });  // Auto-tutup 3 detik
     toast.show();
 
+    // Hapus elemen dari DOM setelah toast tertutup (bersih-bersih)
     toastElement.addEventListener('hidden.bs.toast', () => {
       toastContainer.remove();
     });
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // FUNGSI FILTER DASHBOARD — Filter Tanggal
+  // ═══════════════════════════════════════════════════════════════
+
+  // Terapkan filter tanggal — redirect dengan query string
+  // Contoh URL hasil: /?start_date=2024-01-01&end_date=2024-01-31
   function applyDashFilter() {
     const startDate = document.getElementById('dashStartDate').value;
     const endDate = document.getElementById('dashEndDate').value;
-    const params = new URLSearchParams();  
+    const params = new URLSearchParams();  // Helper untuk membuat query string
     if (startDate) params.set('start_date', startDate);
     if (endDate) params.set('end_date', endDate);
     const qs = params.toString();
-    window.location.href = '/' + (qs ? '?' + qs : '');  
+    window.location.href = '/' + (qs ? '?' + qs : '');  // Redirect ke dashboard dengan filter
   }
 
+  // Reset filter — kembali ke dashboard tanpa filter
   function resetDashFilter() {
     window.location.href = '/';
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // JAM REALTIME — Update setiap detik
+  // ═══════════════════════════════════════════════════════════════
+  // Menampilkan jam digital realtime dengan format HH:MM:SS + zona waktu Indonesia
+  // Zona waktu ditentukan dari offset: -420=WIB, -480=WITA, -540=WIT
   function updateDashClock() {
     const el = document.getElementById('dashRealtimeClock');
     if (!el) return;
     const now = new Date();
-    const h = String(now.getHours()).padStart(2, '0');    
-    const m = String(now.getMinutes()).padStart(2, '0');  
-    
+    const h = String(now.getHours()).padStart(2, '0');    // Jam (2 digit)
+    const m = String(now.getMinutes()).padStart(2, '0');  // Menit (2 digit)
+    // Deteksi zona waktu Indonesia berdasarkan timezone offset
     const tz = now.getTimezoneOffset();
-    let tzLabel = 'WIB';                   
-    if (tz === -480) tzLabel = 'WITA';     
-    else if (tz === -540) tzLabel = 'WIT'; 
+    let tzLabel = 'WIB';                   // Default: Waktu Indonesia Barat
+    if (tz === -480) tzLabel = 'WITA';     // Waktu Indonesia Tengah
+    else if (tz === -540) tzLabel = 'WIT'; // Waktu Indonesia Timur
     el.textContent = h + ':' + m + ' ' + tzLabel;
   }
-  setInterval(updateDashClock, 1000);  
-  document.addEventListener('DOMContentLoaded', updateDashClock);  
+  setInterval(updateDashClock, 1000);  // Update setiap 1 detik (1000ms)
+  document.addEventListener('DOMContentLoaded', updateDashClock);  // Jalankan pertama kali
 
+  // ═══════════════════════════════════════════════════════════════
+  // DETEKSI LOKASI via Geolocation API + OpenStreetMap Nominatim
+  // ═══════════════════════════════════════════════════════════════
+  // Alur: Browser minta izin lokasi → dapat koordinat GPS →
+  //       kirim ke Nominatim API → dapat nama kota → tampilkan
+  // Fallback: "Indonesia" jika user menolak atau terjadi error
   document.addEventListener('DOMContentLoaded', function () {
     const locEl = document.getElementById('dashLocation');
     if (!locEl) return;
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(function (pos) {
-        
+        // Reverse geocoding: koordinat → nama tempat
         fetch('https://nominatim.openstreetmap.org/reverse?lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude + '&format=json&accept-language=id')
           .then(function (r) { return r.json(); })
           .then(function (data) {
-            
+            // Coba ambil nama kota/kabupaten dari respons Nominatim
             var city = data.address.city || data.address.town || data.address.village || data.address.county || '';
             var state = data.address.state || '';
             locEl.textContent = city + (state ? ', ' + state : '');
           })
-          .catch(function () { locEl.textContent = 'Indonesia'; });  
+          .catch(function () { locEl.textContent = 'Indonesia'; });  // Fallback jika API error
       }, function () {
-        locEl.textContent = 'Indonesia';  
+        locEl.textContent = 'Indonesia';  // Fallback jika user menolak izin lokasi
       });
     } else {
-      locEl.textContent = 'Indonesia';  
+      locEl.textContent = 'Indonesia';  // Fallback jika browser tidak support geolocation
     }
   });
 
+  // ─── DETEKSI IP ADDRESS via ipify API ───
+  // Mengambil IP publik pengguna dan menampilkannya di bar filter
   document.addEventListener('DOMContentLoaded', function () {
     var ipEl = document.getElementById('dashDeviceIP');
     if (!ipEl) return;
     fetch('https://api.ipify.org?format=json')
       .then(function (r) { return r.json(); })
-      .then(function (data) { ipEl.textContent = data.ip; })  
-      .catch(function () { ipEl.textContent = '-'; });         
+      .then(function (data) { ipEl.textContent = data.ip; })  // Tampilkan IP
+      .catch(function () { ipEl.textContent = '-'; });         // Fallback jika gagal
   });
 
-  {% if sales_cabang_series %}
-  
+  // ─── INISIALISASI BOOTSTRAP TOOLTIPS ───
+  // ─── GRAFIK BESAR: PENJUALAN PER CABANG (Wave/Area Chart) ───
+  // Smooth area chart menampilkan tren penjualan per cabang per bulan
   document.addEventListener('DOMContentLoaded', function () {
     var chartEl = document.getElementById('salesPerCabangChart');
     if (!chartEl) return;
@@ -464,14 +558,15 @@
     var labels = JSON.parse(labelsEl.textContent);
     var series = JSON.parse(seriesEl.textContent);
 
+    // Palet warna modern — sesuai Materialize & dark mode
     var chartColors = [
-      '#7367f0', 
-      '#28c76f', 
-      '#ff9f43', 
-      '#ea5455', 
-      '#00cfe8', 
-      '#a855f7', 
-      '#f472b6', 
+      '#7367f0', // primary — ungu
+      '#28c76f', // success — hijau
+      '#ff9f43', // warning — oranye
+      '#ea5455', // danger — merah
+      '#00cfe8', // info — cyan
+      '#a855f7', // violet
+      '#f472b6', // pink
     ];
 
     var options = {
@@ -480,7 +575,18 @@
         height: 380,
         fontFamily: 'Inter, -apple-system, sans-serif',
         background: 'transparent',
-        toolbar: { show: false },
+        toolbar: {
+          show: true,
+          tools: {
+            download: '<i class="ri-download-2-line" style="font-size:16px"></i>',
+            selection: false,
+            zoom: false,
+            zoomin: false,
+            zoomout: false,
+            pan: false,
+            reset: false
+          }
+        },
         animations: {
           enabled: true,
           easing: 'easeinout',
@@ -601,10 +707,8 @@
 
     var chart = new ApexCharts(chartEl, options);
     chart.render();
-    window.__salesPerCabangChart = chart;
   });
-  {% endif %}
-  
+  // Aktifkan semua tooltip di halaman (elemen dengan data-bs-toggle="tooltip")
   document.addEventListener('DOMContentLoaded', function () {
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (el) {
@@ -614,8 +718,14 @@
 </script>
 {% endblock page_js %}
 
+{# ══════════════════════════════════════════════════════════════════════ #}
+{# KONTEN UTAMA DASHBOARD #}
+{# Layout: 2-column grid responsive dengan card-card komponen #}
+{# ══════════════════════════════════════════════════════════════════════ #}
 {% block content %}
+{# Filter waktu sudah dipindahkan ke icon di navbar #}
 
+<!-- Label Sumber Data Dashboard -->
 <div class="mb-4">
     <span class="badge bg-label-warning rounded-pill px-3 py-2">
         <i class="ri-dashboard-line me-1"></i>Dashboard Operasional Real-time
@@ -625,8 +735,12 @@
     </small>
 </div>
 
+
 <div class="row g-6 mb-6">
-  
+  <!-- ROW 1: Ringkasan Penjualan + Estimasi + Profit + Slider + Chart Sparkline -->
+  <!-- Ringkasan Penjualan (Sales Overview) -->
+  <!-- Card 3 kolom: Total Aset, Total Harga Beli, Total Harga Jual -->
+  <!-- Data dari: sales_overview context variable -->
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-header">
@@ -695,7 +809,9 @@
       </div>
     </div>
   </div>
-  
+  <!--/ Sales Overview-->
+
+  <!-- Estimasi Keuntungan -->
   <div class="col-6 col-lg-3">
     <div class="card h-100">
       <div class="card-body position-relative">
@@ -724,7 +840,9 @@
       </div>
     </div>
   </div>
-  
+  <!--/ Estimasi Keuntungan -->
+
+  <!-- Keuntungan (Profit) -->
   <div class="col-6 col-lg-3">
     <div class="card h-100">
       <div class="card-body position-relative">
@@ -754,7 +872,9 @@
       </div>
     </div>
   </div>
-  
+  <!--/ Keuntungan -->
+
+  <!-- Weekly Sales with bg-->
   <div class="col-lg-6">
     <div class="swiper-container swiper-container-horizontal swiper text-bg-primary h-100"
       id="swiper-weekly-sales-with-bg">
@@ -800,7 +920,9 @@
       <div class="swiper-pagination"></div>
     </div>
   </div>
-  
+  <!--/ Weekly Sales with bg-->
+
+  <!-- Total Visits -->
   <div class="col-lg-3 col-sm-6">
     <div class="card h-100">
       <div class="card-header">
@@ -861,17 +983,17 @@
       </div>
     </div>
   </div>
-  
+  <!--/ Total Visits -->
+
+  <!-- Sales This Months -->
   <div class="col-lg-3 col-sm-6">
     <div class="card h-100">
-      <div class="card-body position-relative d-flex flex-column">
+      <div class="card-body position-relative">
         <div class="card-info mb-3">
           <h5 class="mb-2">Bulan Ini</h5>
-          {% if sales_this_month %}
           <p class="mb-0">Pendapatan Bersih</p>
           <h5 class="mb-0" data-bs-toggle="tooltip" data-bs-placement="top"
             title="Pendapatan bersih dari Sales Order + POS. SO dihitung setelah diskon termasuk ongkir, POS setelah diskon, tanpa PPN. Periode: {{ sales_this_month_label }}">{{ sales_this_month|rupiah }}</h5>
-          {% endif %}
         </div>
         <div class="position-absolute" style="top: 1.5rem; right: 1.5rem;">
           <div class="avatar">
@@ -880,60 +1002,45 @@
             </div>
           </div>
         </div>
-        {% if sales_this_month %}
         <div id="saleThisMonthChart"></div>
-        {% else %}
-        <div class="flex-grow-1 d-flex align-items-center justify-content-center">
-          <div class="text-center text-muted">
-            <i class="ri-line-chart-line ri-3x mb-2 d-block"></i>
-            Data Kosong
-          </div>
-        </div>
-        {% endif %}
       </div>
     </div>
   </div>
-  
+  <!--/ Sales This Months -->
 </div>
 
+<!-- ═══ GRAFIK BESAR: PENJUALAN PER CABANG (Wave Chart) ═══ -->
 <div class="row g-6 mb-6">
   <div class="col-12">
     <div class="card">
-      <div class="card-header d-flex flex-nowrap align-items-center justify-content-between pb-0">
+      <div class="card-header d-flex justify-content-between align-items-center pb-0">
         <div>
-          <h5 class="mb-1 me-2'><i class="ri-line-chart-line me-2 text-primary"></i>Penjualan per Cabang</h5>
+          <h5 class="mb-1"><i class="ri-line-chart-line me-2 text-primary"></i>Penjualan per Cabang</h5>
           <p class="text-muted mb-0" style="font-size: 0.85rem;">Tren penjualan (SO + POS) per cabang — {% if has_date_filter %}{{ filter_start_date }} s/d {{ filter_end_date }}{% else %}6 bulan terakhir{% endif %}</p>
         </div>
-        <div class="dropdown flex-shrink-0">
+        <div class="dropdown">
           <button class="btn btn-text-secondary rounded-pill text-muted border-0 p-1" type="button"
             data-bs-toggle="dropdown">
             <i class="ri-more-2-line ri-20px"></i>
           </button>
           <div class="dropdown-menu dropdown-menu-end">
-            <a class="dropdown-item" href="javascript:window.location.reload();"><i class="ri-loop-left-line me-2"></i>Refresh Data</a>
-            <a class="dropdown-item" href="javascript:void(0)" onclick="if(window.__salesPerCabangChart) window.__salesPerCabangChart.exportTo({type:'png'});"><i class="ri-download-2-line me-2"></i>Unduh Grafik</a>
-            <a class="dropdown-item" href="{% url 'laporan:keuangan' %}"><i class="ri-file-chart-line me-2"></i>Lihat Laporan</a>
+            <a class="dropdown-item" href="javascript:window.location.reload();"><i
+                class="ri-loop-left-line me-2"></i>Refresh Data</a>
+            <a class="dropdown-item" href="{% url 'laporan:keuangan' %}"><i class="ri-file-chart-line me-2"></i>Lihat
+              Laporan</a>
           </div>
         </div>
       </div>
       <div class="card-body pt-2">
-        {% if sales_cabang_series %}
         <div id="salesPerCabangChart"></div>
-        {% else %}
-        <div class="d-flex align-items-center justify-content-center" style="min-height: 200px;">
-          <div class="text-center text-muted">
-            <i class="ri-line-chart-line ri-3x mb-2 d-block"></i>
-            Data Kosong
-          </div>
-        </div>
-        {% endif %}
       </div>
     </div>
   </div>
 </div>
+<!--/ Grafik Besar Penjualan per Cabang (Wave Chart) -->
 
 <div class="row g-6 mb-6">
-  
+  <!-- Activity Timeline -->
   <div class="col-12 col-md-7 col-xl-6 order-md-2 order-xl-0">
     <div class="card h-100">
       <div class="card-header">
@@ -980,7 +1087,9 @@
       </div>
     </div>
   </div>
-  
+  <!--/ Activity Timeline -->
+
+  <!-- Top Products Table -->
   <div class="col-12 col-md-5 col-xl-6 order-md-1 order-xl-0">
     <div class="card h-100">
       <div class="card-header d-flex justify-content-between">
@@ -1054,7 +1163,13 @@
       </div>
     </div>
   </div>
-  
+  <!--/ Top Products Table -->
+
+
+
+
+
+  <!-- User Table (Replaces Roles Datatable) -->
   <div class="col-12">
     <div class="card h-100">
       <div class="card-header">
@@ -1135,9 +1250,10 @@
       </div>
     </div>
   </div>
-  
+  <!--/ Roles Datatables -->
 </div>
 
+<!-- Delete User Modal -->
 <div class="modal fade" id="deleteUserModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
