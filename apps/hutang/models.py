@@ -280,12 +280,11 @@ class PembayaranHutang(models.Model):
                     import logging
                     logger = logging.getLogger(__name__)
                     logger.error(f"[HUTANG] Auto-jurnal gagal untuk pembayaran #{self.pk}: {e}")
-                    raise ValueError(f"Auto-jurnal pembayaran hutang gagal: {e}")
-            return
+                    raise ValueError(
+                        f"Auto-jurnal pembayaran hutang gagal: {e}. "
+                        "Pembayaran dibatalkan (rolled back)."
+                    )
 
-        # Update total dibayar pada hutang induk
-        # ── Auto-Jurnal: D:Hutang Usaha  K:Kas/Bank ──
-        # Hanya buat jurnal saat record baru dan belum punya jurnal
     def delete(self, *args, **kwargs):
         hutang = self.hutang
         with transaction.atomic():

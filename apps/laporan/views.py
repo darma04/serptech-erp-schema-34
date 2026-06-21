@@ -35,6 +35,53 @@
  - apps/activity_log/models.py → UserActivity (riwayat perubahan)
 ==========================================================================
 """
+
+import logging
+logger = logging.getLogger(__name__)
+
+# ==========================================================================
+# PANDUAN DJANGO UNTUK DEVELOPER PEMULA (baca ini sebelum mempelajari views)
+# ==========================================================================
+#
+# APA ITU CLASS-BASED VIEW (CBV)?
+# - CBV = class Python yang menangani HTTP request dan return response
+# - Django menyediakan CBV bawaan: ListView, CreateView, UpdateView, DeleteView
+# - Setiap CBV punya "lifecycle" (siklus hidup) yang bisa di-customize
+#
+# SIKLUS HIDUP CBV (urutan method yang dipanggil):
+# 1. as_view()     → Entry point, dipanggil oleh URL router
+# 2. dispatch()    → Tentukan method (GET/POST) → panggil get() atau post()
+# 3. get()/post()  → Handle request, kumpulkan data
+# 4. get_queryset()→ Ambil data dari database (bisa di-filter/optimasi)
+# 5. get_context_data() → Siapkan data untuk template (variabel {{ }})
+# 6. render()      → Gabungkan template + context → HTML response
+#
+# METHOD PENTING YANG SERING DI-OVERRIDE:
+# - get_queryset()     → Optimasi query (prefetch_related, select_related)
+# - get_context_data() → Tambah variabel ke template (self.context)
+# - form_valid()       → Proses setelah form divalidasi (sebelum save)
+# - get_success_url()  → URL redirect setelah operasi berhasil
+#
+# DECORATOR YANG SERING DIGUNAKAN:
+# @login_required       → User HARUS login, jika tidak → redirect ke /login/
+# @permission_required  → User harus punya permission tertentu (RBAC)
+# @require_http_methods → Batasi method yang diterima (GET, POST, dll)
+# @never_cache          → Response tidak boleh di-cache oleh browser
+#
+# POLA UMUM VIEW DI PROYEK INI:
+# class MyListView(SubModulePermissionMixin, ListView):
+#     module_name = 'nama_modul'          # Untuk pengecekan RBAC
+#     sub_module_name = 'nama_sub_modul'  # Sub-modul yang diakses
+#     model = MyModel                      # Model database yang dipakai
+#     template_name = 'modul/page.html'    # File HTML template
+#
+#     def get_context_data(self, **kwargs):
+#         context = super().get_context_data(**kwargs)
+#         context = TemplateLayout.init(self, context)  # WAJIB: setup layout
+#         context['data_tambahan'] = ...    # Tambah data custom
+#         return context
+# ==========================================================================
+
 from django.shortcuts import render, get_object_or_404
 # Import dari framework Django
 from django.contrib.auth.decorators import login_required
@@ -58,6 +105,9 @@ from apps.biaya.models import TransaksiBiaya, KategoriBiaya
 from apps.activity_log.models import UserActivity
 # Import dari modul internal proyek
 from apps.core.mixins import ReadPermissionMixin, TenantScopedResponseCacheMixin
+
+
+
 
 
 class LaporanProdukView(TenantScopedResponseCacheMixin, ReadPermissionMixin, ListView):
@@ -332,8 +382,8 @@ class LaporanPenjualanView(TenantScopedResponseCacheMixin, ReadPermissionMixin, 
                 pass
         
         # ===== Build filter kwargs =====
-        so_filter = {'status__in': ['draft', 'confirmed', 'delivered', 'completed']}
-        pos_filter = {'status__in': ['draft', 'unpaid', 'paid']}
+        so_filter = {'status__in': ['confirmed', 'delivered', 'completed']}
+        pos_filter = {'status__in': ['unpaid', 'paid']}
         if filter_start:
             so_filter['tanggal__date__gte'] = filter_start
             pos_filter['tanggal__date__gte'] = filter_start
@@ -598,8 +648,8 @@ class LaporanPembelianView(TenantScopedResponseCacheMixin, ReadPermissionMixin, 
                 stok_saat_ini = sum(s.jumlah for s in p.stok_set.all())
                 qty_historis = stok_saat_ini + so_sold_map.get(p.pk, Dec('0')) + pos_sold_map.get(p.pk, Dec('0')) + adj_out_map.get(p.pk, Dec('0')) + sc_used_map.get(p.pk, Dec('0'))
                 total_produk_pengeluaran += p.harga_beli * qty_historis
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error tidak terduga: %s", e)
         context['total_produk_pengeluaran'] = total_produk_pengeluaran
         context['total_keseluruhan_pembelian'] = total_pembelian + total_produk_pengeluaran
         
@@ -781,8 +831,8 @@ class LaporanKeuanganView(TenantScopedResponseCacheMixin, ReadPermissionMixin, T
                 # Qty historis = stok sekarang + yang sudah terjual + yang keluar via adjustment + yang terpakai di service center
                 qty_historis = stok_saat_ini + qty_sold_so + qty_sold_pos + qty_adj_out + qty_sc_used
                 total_pembelian_produk += p.harga_beli * qty_historis
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error tidak terduga: %s", e)
 
         total_pengeluaran = total_pembelian + total_biaya + total_pembelian_produk
         total_pengeluaran_kas = total_pembelian_kas + total_biaya + total_pembelian_produk
@@ -815,12 +865,12 @@ class LaporanKeuanganView(TenantScopedResponseCacheMixin, ReadPermissionMixin, T
                 from apps.produk.models import Gudang as GudangModel
                 try:
                     cabang_obj = GudangModel.objects.get(pk=cabang_id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Error tidak terduga: %s", e)
             data_akuntansi = get_laba_rugi(akuntansi_filter_start, akuntansi_filter_end, cabang=cabang_obj)
             laba_rugi_akuntansi = data_akuntansi['laba_bersih']
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error tidak terduga: %s", e)
         
         # ===== Total Aset — Formula Inventori Historis (SINKRON dengan Dashboard) =====
         # Total Aset = harga_beli × semua qty yang pernah masuk (stok + terjual + adj_out)
@@ -876,8 +926,8 @@ class LaporanKeuanganView(TenantScopedResponseCacheMixin, ReadPermissionMixin, T
                 if stok_saat_ini > 0:
                     total_harga_beli_ready += produk.harga_beli * stok_saat_ini
                     total_harga_jual_ready += produk.harga_jual * stok_saat_ini
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error tidak terduga: %s", e)
         
         estimasi_keuntungan = total_harga_jual_ready - total_harga_beli_ready
         
@@ -928,8 +978,8 @@ class LaporanKeuanganView(TenantScopedResponseCacheMixin, ReadPermissionMixin, T
             # CATATAN: Service Center tidak tersedia di SERPTECH-Software-Isolated-Database-34
 
             keuntungan_kotor = keuntungan_so + keuntungan_pos + keuntungan_sc
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error tidak terduga: %s", e)
         
         # Data konteks: total_pemasukan — untuk ditampilkan di template
         context['total_pemasukan'] = total_pemasukan
@@ -1135,6 +1185,7 @@ class LaporanPenjualanDetailView(ReadPermissionMixin, DetailView):
     context_object_name = 'sales_order'
     # Modul permission yang dicek: 'laporan'
     permission_module = 'laporan'
+    permission_sub_module = 'laporan_penjualan'
     
     def get_context_data(self, **kwargs):
         """Menambahkan data konteks tambahan ke template."""
@@ -1166,6 +1217,7 @@ class LaporanPembelianDetailView(ReadPermissionMixin, DetailView):
     context_object_name = 'purchase_order'
     # Modul permission yang dicek: 'laporan'
     permission_module = 'laporan'
+    permission_sub_module = 'laporan_pembelian'
     
     def get_context_data(self, **kwargs):
         """Menambahkan data konteks tambahan ke template."""
@@ -1194,6 +1246,7 @@ class LaporanStokDetailView(ReadPermissionMixin, DetailView):
     context_object_name = 'stok'
     # Modul permission yang dicek: 'laporan'
     permission_module = 'laporan'
+    permission_sub_module = 'laporan_stok'
     
     def get_context_data(self, **kwargs):
         """Menambahkan data konteks tambahan ke template."""
@@ -1246,258 +1299,6 @@ class LaporanStokDetailView(ReadPermissionMixin, DetailView):
 
 # ═══════════════════════════════════════════════════════════════
 #  LAPORAN SERVICE — Laporan Order Service Center
-# ═══════════════════════════════════════════════════════════════
-
-class LaporanServiceView(TenantScopedResponseCacheMixin, ReadPermissionMixin, TemplateView):
-    cache_timeout = 120
-    """
-    Laporan Service Center — Analitik order service.
-    URL: /laporan/service/
-    Filter: start_date, end_date, status, teknisi
-    Cards: total order, total revenue, order selesai, rata-rata biaya
-    """
-    template_name = 'laporan/service.html'
-    permission_module = 'laporan'
-    permission_sub_module = 'laporan_service'
-
-    def get_context_data(self, **kwargs):
-        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
-        from datetime import datetime
-        from decimal import Decimal
-        from django.contrib.auth.models import User
-        # CATATAN: Service Center tidak tersedia di SERPTECH-Software-Isolated-Database-34
-        context['error_message'] = 'Modul Service Center tidak tersedia'
-        return context
-
-        # Parse filter params
-        start_date_str = self.request.GET.get('start_date', '')
-        end_date_str = self.request.GET.get('end_date', '')
-        filter_status = self.request.GET.get('status', '')
-        filter_teknisi = self.request.GET.get('teknisi', '')
-        context['filter_start_date'] = start_date_str
-        context['filter_end_date'] = end_date_str
-        context['filter_status'] = filter_status
-        context['filter_teknisi'] = filter_teknisi
-        context['status_choices'] = OrderService.STATUS_CHOICES
-        context['teknisi_list'] = User.objects.filter(
-            order_service_teknisi__isnull=False
-        ).distinct()
-
-        filter_start = None
-        filter_end = None
-        if start_date_str:
-            try:
-                filter_start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-        if end_date_str:
-            try:
-                filter_end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-
-        # Base queryset
-        qs = OrderService.objects.select_related(
-            'pelanggan', 'jenis_perangkat', 'teknisi', 'diterima_oleh', 'metode_pembayaran'
-        ).prefetch_related('items', 'penggunaan_sparepart')
-
-        if filter_start:
-            qs = qs.filter(tanggal_masuk__date__gte=filter_start)
-        if filter_end:
-            qs = qs.filter(tanggal_masuk__date__lte=filter_end)
-        if filter_status:
-            qs = qs.filter(status=filter_status)
-        if filter_teknisi:
-            qs = qs.filter(teknisi_id=filter_teknisi)
-
-        order_list = qs.order_by('-tanggal_masuk')
-
-        # === Summary cards ===
-        total_order = order_list.count()
-        order_selesai = order_list.filter(status__in=['selesai', 'diambil']).count()
-        order_dibatalkan = order_list.filter(status='dibatalkan').count()
-
-        # Revenue: total biaya_akhir untuk order lunas
-        total_revenue = order_list.filter(
-            status_bayar='lunas'
-        ).aggregate(total=Sum('biaya_akhir'))['total'] or Decimal('0')
-
-        # Total biaya layanan
-        total_biaya_layanan = Decimal('0')
-        total_biaya_sparepart = Decimal('0')
-        for order in order_list:
-            total_biaya_layanan += sum(item.biaya for item in order.items.all())
-            total_biaya_sparepart += sum(
-                sp.jumlah * sp.harga_satuan for sp in order.penggunaan_sparepart.all()
-            )
-
-        rata_rata_biaya = int(total_revenue / total_order) if total_order > 0 else 0
-
-        # Status distribution
-        status_dist = {}
-        for code, label in OrderService.STATUS_CHOICES:
-            count = order_list.filter(status=code).count()
-            if count > 0:
-                status_dist[label] = count
-
-        # Top 5 teknisi by completed orders
-        top_teknisi = order_list.filter(
-            teknisi__isnull=False,
-            status__in=['selesai', 'diambil']
-        ).values(
-            'teknisi__username', 'teknisi__first_name', 'teknisi__last_name'
-        ).annotate(
-            total_order=Count('id'),
-            total_revenue=Sum('biaya_akhir')
-        ).order_by('-total_order')[:5]
-
-        # Top 5 jenis perangkat
-        top_perangkat = order_list.values(
-            'jenis_perangkat__nama'
-        ).annotate(
-            total=Count('id')
-        ).order_by('-total')[:5]
-
-        context.update({
-            'order_list': order_list,
-            'total_order': total_order,
-            'order_selesai': order_selesai,
-            'order_dibatalkan': order_dibatalkan,
-            'total_revenue': total_revenue,
-            'total_biaya_layanan': total_biaya_layanan,
-            'total_biaya_sparepart': total_biaya_sparepart,
-            'rata_rata_biaya': rata_rata_biaya,
-            'status_dist': status_dist,
-            'top_teknisi': top_teknisi,
-            'top_perangkat': top_perangkat,
-        })
-
-        # Template cetak untuk export PDF
-        from apps.pengaturan.models import TemplateCetak
-        try:
-            context['export_pdf_template'] = TemplateCetak.objects.first()
-        except Exception:
-            context['export_pdf_template'] = None
-
-        return context
-
-
-# ═══════════════════════════════════════════════════════════════
-#  LAPORAN SPAREPART — Laporan Penggunaan Sparepart untuk Service
-# ═══════════════════════════════════════════════════════════════
-
-class LaporanSparepartView(TenantScopedResponseCacheMixin, ReadPermissionMixin, TemplateView):
-    cache_timeout = 120
-    """
-    Laporan Sparepart — Analitik penggunaan sparepart pada service.
-    URL: /laporan/sparepart/
-    Filter: start_date, end_date
-    Cards: total penggunaan, total COGS, top sparepart, gudang impact
-    """
-    template_name = 'laporan/sparepart.html'
-    permission_module = 'laporan'
-    permission_sub_module = 'laporan_sparepart'
-
-    def get_context_data(self, **kwargs):
-        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
-        from datetime import datetime
-        from decimal import Decimal
-        # CATATAN: Service Center tidak tersedia di SERPTECH-Software-Isolated-Database-34
-        context['error_message'] = 'Modul Service Center tidak tersedia'
-        return context
-
-        # Parse filter params
-        start_date_str = self.request.GET.get('start_date', '')
-        end_date_str = self.request.GET.get('end_date', '')
-        context['filter_start_date'] = start_date_str
-        context['filter_end_date'] = end_date_str
-
-        filter_start = None
-        filter_end = None
-        if start_date_str:
-            try:
-                filter_start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-        if end_date_str:
-            try:
-                filter_end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                pass
-
-        # Base queryset
-        qs = PenggunaanSparepart.objects.select_related(
-            'order_service', 'order_service__pelanggan', 'produk', 'gudang'
-        )
-        if filter_start:
-            qs = qs.filter(dibuat_pada__date__gte=filter_start)
-        if filter_end:
-            qs = qs.filter(dibuat_pada__date__lte=filter_end)
-
-        sparepart_list = qs.order_by('-dibuat_pada')
-
-        # === Summary cards ===
-        total_penggunaan = sparepart_list.count()
-        total_qty = sparepart_list.aggregate(total=Sum('jumlah'))['total'] or Decimal('0')
-
-        # COGS: sum(jumlah × harga_satuan) — hitung di Python karena subtotal = property
-        total_cogs = Decimal('0')
-        for sp in sparepart_list:
-            total_cogs += sp.jumlah * sp.harga_satuan
-
-        # Top 10 sparepart paling banyak digunakan
-        top_sparepart_raw = sparepart_list.values(
-            'produk__nama', 'produk__sku'
-        ).annotate(
-            total_qty=Sum('jumlah'),
-            total_used=Count('id')
-        ).order_by('-total_qty')[:10]
-        
-        top_sparepart = list(top_sparepart_raw)
-
-        # Annotate COGS per sparepart entirely in Python
-        for sp_item in top_sparepart:
-            cost = Decimal('0')
-            for sp in sparepart_list:
-                if sp.produk.nama == sp_item['produk__nama']:
-                    cost += sp.jumlah * sp.harga_satuan
-            sp_item['total_cost'] = cost
-
-        # Impact per gudang via Dictionary aggregation
-        gudang_dict = {}
-        for sp in sparepart_list:
-            gn = sp.gudang.nama if sp.gudang else 'Gudang Utama'
-            if gn not in gudang_dict:
-                gudang_dict[gn] = {'gudang__nama': gn, 'total_qty': Decimal('0'), 'total_cost': Decimal('0'), 'total_items': 0}
-            
-            gudang_dict[gn]['total_qty'] += sp.jumlah
-            gudang_dict[gn]['total_cost'] += sp.jumlah * sp.harga_satuan
-            gudang_dict[gn]['total_items'] += 1
-
-        gudang_impact = list(gudang_dict.values())
-        gudang_impact.sort(key=lambda x: x['total_qty'], reverse=True)
-
-        context.update({
-            'sparepart_list': sparepart_list,
-            'total_penggunaan': total_penggunaan,
-            'total_qty': total_qty,
-            'total_cogs': total_cogs,
-            'top_sparepart': top_sparepart,
-            'gudang_impact': gudang_impact,
-        })
-
-        # Template cetak untuk export PDF
-        from apps.pengaturan.models import TemplateCetak
-        try:
-            context['export_pdf_template'] = TemplateCetak.objects.first()
-        except Exception:
-            context['export_pdf_template'] = None
-
-        return context
-
-
-# ═══════════════════════════════════════════════════════════════
-#  LAPORAN CABANG — Laporan Performa per Cabang/Gudang
 # ═══════════════════════════════════════════════════════════════
 
 class LaporanCabangView(TenantScopedResponseCacheMixin, ReadPermissionMixin, TemplateView):
@@ -1582,8 +1383,8 @@ class LaporanCabangView(TenantScopedResponseCacheMixin, ReadPermissionMixin, Tem
                 try:
                     from apps.hr.models import Karyawan as KaryawanModel
                     jml_karyawan = KaryawanModel.objects.filter(aktif=True, cabang_id=gid).count()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Error tidak terduga: %s", e)
 
                 # Transaksi POS di cabang ini
                 jml_trx_pos = POSTransaction.objects.filter(gudang_id=gid, status='paid').count()
@@ -1796,8 +1597,8 @@ class LaporanCabangView(TenantScopedResponseCacheMixin, ReadPermissionMixin, Tem
             transfer_in_count = TransferStok.objects.filter(**transfer_in_filter).count()
             transfer_out_count = TransferStok.objects.filter(**transfer_out_filter).count()
             adjustment_count = AdjustmentStok.objects.filter(**adj_filter).count()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error tidak terduga: %s", e)
 
         context['total_item_stok'] = total_item_stok
         context['total_stok_qty'] = int(total_stok_qty)

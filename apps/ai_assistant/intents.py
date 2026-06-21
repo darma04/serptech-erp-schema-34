@@ -831,8 +831,8 @@ def _gather_pelanggan(today, month_start):
                 f"Rp {float(c['total']):,.0f} ({c['jumlah_trx']} trx)"
             )
     # Tangkap error Exception — lanjutkan tanpa crash
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Error tidak terduga: %s", e)
 
     # Customer dengan transaksi POS terbanyak
     top_pos_customers = []
@@ -853,8 +853,8 @@ def _gather_pelanggan(today, month_start):
                 f"Rp {float(c['total']):,.0f} ({c['jumlah_trx']} trx)"
             )
     # Tangkap error Exception — lanjutkan tanpa crash
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Error tidak terduga: %s", e)
 
     ringkasan = f"""Data Pelanggan:
 - Total Customer Aktif: {total}
@@ -2281,9 +2281,9 @@ def _gather_business_plan_90hari(today, month_start):
     total_supplier = Supplier.objects.count()
 
     # Biaya rata-rata
-    from apps.biaya.models import Biaya
+    from apps.biaya.models import TransaksiBiaya
     # Query database — ambil data total_biaya yang sesuai filter
-    total_biaya = Biaya.objects.filter(
+    total_biaya = TransaksiBiaya.objects.filter(
         tanggal__gte=month_start, tanggal__lte=today
     ).aggregate(t=Sum('jumlah'))['t'] or 0
 

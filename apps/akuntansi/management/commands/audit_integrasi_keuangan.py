@@ -89,25 +89,17 @@ class Command(BaseCommand):
             for p in hr_orphans[:5]:
                 self.stdout.write(f"    - {p.karyawan.nama} ({p.periode_bulan}/{p.periode_tahun})")
 
-        # 6. JurnalEntry duplikat (same sumber + sumber_id + sumber_ref)
-        duplicates = JurnalEntry.objects.exclude(
-            sumber_ref__endswith='_reversal'
-        ).exclude(
-            sumber_ref__endswith='_hpp'
-        ).filter(
-            is_reversed=False
-        ).values('sumber', 'sumber_id', 'sumber_ref').annotate(
+        # 6. JurnalEntry duplikat (same sumber + sumber_id)
+        duplicates = JurnalEntry.objects.values('sumber', 'sumber_id').annotate(
             cnt=Count('id')
         ).filter(cnt__gt=1, sumber_id__isnull=False).exclude(
             sumber__in=['pembalik', 'kas_bank']
         )
+        # Exclude reversal entries (sumber_ref ends with _reversal or _hpp)
         dup_count = 0
         for dup in duplicates:
             actual_dups = JurnalEntry.objects.filter(
-                sumber=dup['sumber'],
-                sumber_id=dup['sumber_id'],
-                sumber_ref=dup['sumber_ref'],
-                is_reversed=False,
+                sumber=dup['sumber'], sumber_id=dup['sumber_id']
             ).exclude(sumber_ref__endswith='_reversal').exclude(sumber_ref__endswith='_hpp')
             if actual_dups.count() > 1:
                 dup_count += 1

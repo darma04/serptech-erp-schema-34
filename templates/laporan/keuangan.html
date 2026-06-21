@@ -26,7 +26,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
 {% block content %}
 <div class="container-xxl flex-grow-1 container-p-y">
     <h4 class="mb-1"><i class="ri-bar-chart-box-line me-2"></i>Laporan Keuangan</h4>
-    <!-- Label Sumber Data -->
+    
     <div class="mb-4">
         <span class="badge bg-label-warning rounded-pill px-3 py-2">
             <i class="ri-database-2-line me-1"></i>Laporan Operasional Real-time
@@ -36,7 +36,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         </small>
     </div>
 
-    <!-- 4 Summary Cards -->
     <div class="row g-2 g-md-3 mb-4">
         <div class="col-6 col-lg-3">
             <div class="card">
@@ -127,7 +126,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         </div>
     </div>
 
-    <!-- Ringkasan Keuntungan & Stok -->
     <div class="row g-2 g-md-3 mb-4">
         <div class="col-6 col-lg-3">
             <div class="card">
@@ -217,7 +215,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         </div>
     </div>
 
-    <!-- Filter Card -->
     <div class="card mb-4">
         <div class="card-body">
             <div class="row g-3">
@@ -248,7 +245,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     </select>
                 </div>
             </div>
-            <!-- Baris kedua: Kolom filter + Tombol -->
+            
             <div class="row g-3 mt-2 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label">Kolom Pemasukan</label>
@@ -381,7 +378,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         </div>
     </div>
 
-    <!-- Tabel Pemasukan -->
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between">
             <h5 class="mb-0"><i class="ri-arrow-down-line me-2 text-success"></i>Pendapatan Bersih (Penjualan)</h5>
@@ -486,7 +482,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                                     <small class="text-muted" style="font-size: 0.75rem;">SO: {{ total_sales_order|rupiah }} | POS: {{ total_pos|rupiah }}</small>
                                 </div>
                             </div>
-                        </td>
+                        </td><td class="py-3"></td><td class="py-3"></td><td class="py-3"></td><td class="py-3"></td>
                         <td class="py-3" style="vertical-align: middle;">
                             <div class="d-flex flex-column align-items-center">
                                 <span class="badge bg-label-success d-flex align-items-center gap-1 mb-2"
@@ -505,7 +501,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         </div>
     </div>
 
-    <!-- Tabel Pengeluaran -->
     <div class="card">
         <div class="card-header d-flex justify-content-between">
             <h5 class="mb-0"><i class="ri-arrow-up-line me-2 text-danger"></i>Beban/DPP Operasional (PO + Biaya + Produk)</h5>
@@ -640,7 +635,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
 
 {% block page_js %}
 <script>
-    // Initialize DataTables
+    
     let dtPemasukan, dtPengeluaran;
     $(document).ready(function () {
         if ($('#tabelPemasukan tbody tr').length > 0 && !$('#tabelPemasukan tbody tr td[colspan]').length) {
@@ -675,7 +670,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         }
     });
 
-    // Template Data for Independent Headers/Footers
     const EXCEL_INFO = {
         name: "{{ export_excel_template.header_nama_perusahaan|escapejs|default:'Nama Perusahaan' }}",
         address: "{{ export_excel_template.header_alamat|escapejs|default:'Alamat Bisnis' }}",
@@ -695,16 +689,14 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
     };
 
     function exportToExcel() {
-        // Ambil semua tabel di halaman (Pemasukan dan Pengeluaran)
+        
         const tables = document.querySelectorAll('.table-responsive table');
-        if (tables.length === 0) { alert('Tabel tidak ditemukan!'); return; }
+        if (tables.length === 0) { showExportError(); return; }
 
-        // Buat tabel HTML untuk Excel (format .xls)
         let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
         html += '<head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>';
         html += '<body>';
 
-        // --- ADD EXCEL HEADER (Company Info) ---
         html += '<table border="0">';
         if (typeof EXCEL_INFO !== 'undefined') {
             html += `<tr><td colspan="10" style="text-align:center; font-size:16px; font-weight:bold; color:#5F61E6;">${EXCEL_INFO.name}</td></tr>`;
@@ -716,19 +708,17 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
 
         html += '<table border="1">';
 
-        // Ekspor kedua tabel
         tables.forEach((table, tableIndex) => {
-            // Tambah judul tabel
+            
             html += '<tr><td colspan="10" style="background-color: #696CFF; color: #FFFFFF; font-weight: bold; font-size: 14px;">';
             html += tableIndex === 0 ? 'PEMASUKAN (PENJUALAN)' : 'PENGELUARAN (PEMBELIAN & BIAYA)';
             html += '</td></tr>';
 
-            // Tambah header
             const headerRow = table.querySelector('thead tr');
             if (headerRow) {
                 html += '<tr style="background-color: #696CFF; color: #FFFFFF; font-weight: bold;">';
                 headerRow.querySelectorAll('th').forEach((th, index) => {
-                    // Exclude last column (Aksi)
+                    
                     if (index < headerRow.querySelectorAll('th').length - 1 && window.getComputedStyle(th).display !== 'none') {
                         html += `<th>${th.textContent.trim()}</th>`;
                     }
@@ -736,7 +726,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                 html += '</tr>';
             }
 
-            // Tambah baris data
             const tbody = table.querySelector('tbody');
             if (tbody) {
                 tbody.querySelectorAll('tr').forEach(tr => {
@@ -745,7 +734,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
 
                     html += '<tr>';
                     cells.forEach((td, index) => {
-                        // Exclude last column (Aksi)
+                        
                         if (index < cells.length - 1 && window.getComputedStyle(td).display !== 'none') {
                             html += `<td>${td.textContent.trim().replace(/\s+/g, ' ')}</td>`;
                         }
@@ -754,7 +743,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                 });
             }
 
-            // Tambah baris RINGKASAN dari tfoot untuk setiap tabel
             const tfoot = table.querySelector('tfoot');
             if (tfoot) {
                 const tfootRow = tfoot.querySelector('tr');
@@ -762,7 +750,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                     html += '<tr style="background-color: #f8f9fa; font-weight: bold;">';
                     const tfootCells = tfootRow.querySelectorAll('td');
                     tfootCells.forEach((td, index) => {
-                        // Exclude last column (empty/Aksi)
+                        
                         if (index < tfootCells.length - 1) {
                             let clone = td.cloneNode(true);
                             clone.querySelectorAll('small, i').forEach(el => el.remove());
@@ -775,15 +763,13 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                 }
             }
 
-            // Tambah spasi antar tabel
             html += '<tr><td colspan="10">&nbsp;</td></tr>';
         });
 
         html += '</table>';
 
-        // --- ADD EXCEL FOOTER ---
         html += '<table border="0">';
-        html += `<tr><td colspan="10"></td></tr>`; // empty spacer
+        html += `<tr><td colspan="10"></td></tr>`; 
         if (typeof EXCEL_INFO !== 'undefined') {
             html += `<tr><td colspan="10" style="text-align:right; font-size:10px; color:#697A8D;">Dicetak pada: ${new Date().toLocaleString('id-ID')}</td></tr>`;
             html += `<tr><td colspan="10" style="text-align:right; font-size:10px; color:#697A8D;">${EXCEL_INFO.copyright}</td></tr>`;
@@ -801,12 +787,12 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
     function exportToPDF() {
         if (typeof pdfMake === 'undefined') { alert('pdfMake library tidak tersedia!'); return; }
         const tables = document.querySelectorAll('.table-responsive table');
-        if (tables.length === 0) { alert('Tabel tidak ditemukan!'); return; }
+        if (tables.length === 0) { showExportError(); return; }
 
         const allContent = [];
 
         tables.forEach((table, tableIndex) => {
-            // Tambah judul tabel
+            
             const titleText = tableIndex === 0 ? 'PEMASUKAN (PENJUALAN)' : 'PENGELUARAN (PEMBELIAN & BIAYA)';
             allContent.push({
                 text: titleText,
@@ -817,7 +803,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                 bold: true
             });
 
-            // Extract headers
             const headers = [];
             const headerRow = table.querySelector('thead tr');
             if (headerRow) {
@@ -836,7 +821,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
 
             const body = [headers];
 
-            // Extract data rows
             const tbody = table.querySelector('tbody');
             if (tbody) {
                 tbody.querySelectorAll('tr').forEach(tr => {
@@ -854,7 +838,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                 });
             }
 
-            // Tambah baris RINGKASAN dari tfoot
             const tfoot = table.querySelector('tfoot');
             if (tfoot) {
                 const tfootRow = tfoot.querySelector('tr');
@@ -870,7 +853,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                             const colspan = parseInt(td.getAttribute('colspan') || 1);
                             summaryRow.push({ text: text, colSpan: colspan, bold: true, fillColor: '#f8f9fa' });
                             colspanUsed += colspan;
-                            // Tambah sel kosong untuk colspan
+                            
                             for (let i = 1; i < colspan; i++) {
                                 summaryRow.push({});
                             }
@@ -880,7 +863,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
                 }
             }
 
-            // Tambah tabel ke konten
             allContent.push({
                 table: { headerRows: 1, widths: Array(headers.length).fill('auto'), body: body },
                 layout: {
@@ -953,15 +935,14 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         window.location.href = window.location.pathname + (qs ? '?' + qs : '');
     }
     function resetFilter() {
-        // Reset column checkboxes ke semua checked
+        
         document.querySelectorAll('.col-pemasukan-cb, .col-pengeluaran-cb').forEach(cb => { cb.checked = true; });
         togglePemasukanCols();
         togglePengeluaranCols();
-        // Reset filter dan reload
+        
         window.location.href = window.location.pathname;
     }
 
-    // ===== Column Toggle Pemasukan =====
     function togglePemasukanCols() {
         const checkboxes = document.querySelectorAll('.col-pemasukan-cb');
         if (dtPemasukan) {
@@ -993,7 +974,6 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         togglePemasukanCols();
     }
 
-    // ===== Column Toggle Pengeluaran =====
     function togglePengeluaranCols() {
         const checkboxes = document.querySelectorAll('.col-pengeluaran-cb');
         if (dtPengeluaran) {
@@ -1026,7 +1006,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
     }
 </script>
 <style>
-    /* Responsive Summary Cards - Laporan Keuangan */
+    
     .row>[class*="col-6"]>.card {
         height: 100%;
     }
@@ -1099,7 +1079,7 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
     }
 </style>
 <script>
-    // Inisialisasi Bootstrap Tooltip
+    
     document.addEventListener('DOMContentLoaded', function () {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipTriggerList.forEach(function (el) {
@@ -1107,4 +1087,42 @@ Filter: periode, kategori. Grafik dan tabel ringkasan.
         });
     });
 </script>
+
+<div class="modal fade" id="exportErrorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning align-items-center py-3">
+                <h5 class="modal-title text-dark mb-0">
+                    <i class="ri-error-warning-line me-2"></i>Export Gagal
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center py-3">
+                    <i class="ri-file-warning-line text-warning" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3 mb-2">Tabel Tidak Ditemukan</h4>
+                    <p class="text-muted mb-0">Tidak ada data tabel yang dapat di-export. Pastikan tabel sudah dimuat dengan benar sebelum melakukan export.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i>Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+function showExportError() {
+    var modal = document.getElementById('exportErrorModal');
+    if (modal) {
+        new bootstrap.Modal(modal).show();
+    } else {
+        alert('Tabel tidak ditemukan!');
+    }
+}
+</script>
+
 {% endblock page_js %}

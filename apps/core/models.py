@@ -22,6 +22,12 @@
  - apps/core/context_processors.py → Menyuntikkan permission ke template
  - apps/permission_management/ → UI untuk mengelola permissions
  - templates/layout/partials/menu/ → Sidebar difilter berdasarkan permission
+
+ Konvensi penamaan field tanggal:
+ - Modul ini menggunakan konvensi English (created_at, updated_at) untuk
+   timestamp tracking, berbeda dengan modul inti yang menggunakan konvensi
+   Indonesian (dibuat_pada, diupdate_pada, tanggal). Hal ini dipertahankan
+   untuk konsistensi internal modul ini.
 ==========================================================================
 """
 
